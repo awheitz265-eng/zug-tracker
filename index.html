@@ -1,0 +1,459 @@
+<!doctype html>
+<html lang="de-CH">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Zug-Tracker</title>
+<meta name="description" content="Live-Position von Zügen auf der Karte, geschätzt aus Fahrplan und Echtzeitdaten.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+:root{
+  --blue:#005064; --orange:#f07c01; --navy:#253c48; --taupe:#918277; --teal:#027987; --sky:#46bdcf;
+  --bg:#f4f6f7; --panel:#ffffff; --text:#1d2b33; --muted:#5f6d74; --line:#dde3e6;
+  --ok:#027987; --warn:#f07c01; --bad:#c0392b;
+  --shadow:0 6px 24px rgba(0,40,55,.14);
+  --radius:14px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0f1a20; --panel:#16252d; --text:#e6eef1; --muted:#9db0b8; --line:#2a3c46;
+    --shadow:0 6px 24px rgba(0,0,0,.45);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0f1a20; --panel:#16252d; --text:#e6eef1; --muted:#9db0b8; --line:#2a3c46;
+  --shadow:0 6px 24px rgba(0,0,0,.45);
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font-family:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4}
+.app{display:grid;grid-template-columns:400px 1fr;height:100%;height:100dvh}
+aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;z-index:2}
+header{background:var(--blue);color:#fff;padding:14px 16px 12px}
+header h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
+header h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--orange);box-shadow:0 0 0 0 rgba(240,124,1,.7);animation:pulse 2s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(240,124,1,.7)}70%{box-shadow:0 0 0 9px rgba(240,124,1,0)}100%{box-shadow:0 0 0 0 rgba(240,124,1,0)}}
+header p{margin:4px 0 0;font-size:13px;opacity:.85}
+form{padding:14px 16px 8px;border-bottom:1px solid var(--line)}
+textarea{width:100%;min-height:64px;resize:vertical;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;background:var(--bg);color:var(--text)}
+textarea:focus{outline:none;border-color:var(--teal)}
+.row{display:flex;gap:8px;margin-top:8px;align-items:center}
+button{font:inherit;cursor:pointer;border:0;border-radius:10px}
+.primary{background:var(--orange);color:#fff;font-weight:700;padding:10px 16px;flex:1}
+.primary:disabled{opacity:.6;cursor:wait}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+.chip{background:transparent;border:1px solid var(--line);color:var(--muted);padding:4px 10px;font-size:12.5px;border-radius:999px}
+.chip:hover{border-color:var(--teal);color:var(--teal)}
+.content{overflow:auto;padding:12px 16px 20px;flex:1;min-height:0}
+.status{font-size:13.5px;color:var(--muted);margin:2px 0 10px}
+.status.err{color:var(--bad)}
+.parsed{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.parsed b{color:var(--text)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--panel);transition:border-color .15s}
+.card:hover{border-color:var(--sky)}
+.card.sel{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}
+.card .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+.card .name{font-weight:800;font-size:16px;color:var(--blue)}
+:root[data-theme="dark"] .card .name{color:var(--sky)}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]) .card .name{color:var(--sky)}}
+.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
+.badge.ok{background:rgba(2,121,135,.14);color:var(--ok)}
+.badge.late{background:rgba(240,124,1,.16);color:var(--warn)}
+.badge.na{background:rgba(145,130,119,.18);color:var(--taupe)}
+.sub{color:var(--muted);font-size:13px;margin-top:2px}
+.bar{height:6px;background:var(--line);border-radius:3px;margin:10px 0 6px;overflow:hidden}
+.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--orange));border-radius:3px}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13.5px;margin-top:6px}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-weight:600}
+.stops{list-style:none;padding:0;margin:10px 0 0;border-top:1px dashed var(--line)}
+.stops li{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;padding:5px 0;font-size:13.5px}
+.stops li .d{width:10px;height:10px;border-radius:50%;border:2px solid var(--teal);background:var(--panel)}
+.stops li.past{color:var(--muted)}
+.stops li.past .d{background:var(--teal)}
+.stops li.cur .d{background:var(--orange);border-color:var(--orange)}
+.stops .tm{font-variant-numeric:tabular-nums;text-align:right}
+.stops .tm s{color:var(--muted);margin-right:4px}
+.note{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding:10px 16px;line-height:1.35}
+.note a{color:var(--teal)}
+#map{height:100%;width:100%;background:#dfe7ea}
+.train-icon{background:var(--orange);color:#fff;border:3px solid #fff;border-radius:50%;width:34px!important;height:34px!important;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.35);font-size:17px}
+.train-icon.other{background:var(--blue)}
+.leaflet-tooltip.trainlbl{font-family:"Nunito Sans",sans-serif;font-weight:800;color:var(--blue);border-radius:8px;padding:3px 8px}
+.leaflet-container{font-family:"Nunito Sans",sans-serif}
+.empty{color:var(--muted);font-size:14px;padding:6px 0}
+.small{font-size:12.5px;color:var(--muted)}
+.list{font-size:13.5px;margin:6px 0 0;padding-left:18px}
+@media (max-width:760px){
+  .app{grid-template-columns:1fr;grid-template-rows:42vh 1fr}
+  .mapwrap{order:-1}
+  aside{border-right:0;border-top:1px solid var(--line);overflow:auto}
+  .content{overflow:visible;flex:none}
+  body.has-results .chips{display:none}
+  header{padding:10px 16px}
+  header p{display:none}
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <header>
+      <h1><span class="dot"></span>Zug-Tracker</h1>
+      <p>Wo ist mein Zug gerade? Live-Schätzung aus Fahrplan und Echtzeitdaten.</p>
+    </header>
+    <form id="f" autocomplete="off">
+      <textarea id="q" placeholder="z. B. Such mir den TGV, der im Moment von Paris Gare de Lyon nach Basel SBB unterwegs ist"></textarea>
+      <div class="row"><button class="primary" id="go" type="submit">Zug suchen</button></div>
+      <div class="chips" id="chips"></div>
+    </form>
+    <div class="content">
+      <div class="parsed" id="parsed"></div>
+      <div class="status" id="status">Gib ein, welchen Zug du suchst: Zugtyp, «von … nach …», optional die Zugnummer.</div>
+      <div id="results"></div>
+    </div>
+    <div class="note">
+      Position = <b>Schätzung</b> aus Fahrplan und Echtzeit-Prognose, Linie zwischen den Halten als Luftlinie. Keine GPS-Daten.
+      Fahrplandaten: <a href="https://opentransportdata.swiss" target="_blank" rel="noopener">opentransportdata.swiss</a> via <a href="https://transport.opendata.ch" target="_blank" rel="noopener">transport.opendata.ch</a>.
+    </div>
+  </aside>
+  <div class="mapwrap"><div id="map"></div></div>
+</div>
+
+<script>
+"use strict";
+const API = "https://transport.opendata.ch/v1";
+const TZ = "Europe/Zurich";
+const REFRESH_MS = 60000;   // Daten neu laden (API bittet um Zurückhaltung)
+const TICK_MS = 2000;       // Position neu berechnen
+
+/* ---------- Texterkennung ---------- */
+const TYPE_ALIASES = [
+  [/\b(tgv\s*lyria|lyria|tgv\s*inoui|inoui|tgv)\b/i, "TGV"],
+  [/\bouigo\b/i, "OUIGO"],
+  [/\b(ice)\b/i, "ICE"],
+  [/\b(railjet\s*xpress|rjx)\b/i, "RJX"],
+  [/\b(railjet|rj)\b/i, "RJ"],
+  [/\b(nightjet|nj)\b/i, "NJ"],
+  [/\b(euronight|en)\b/i, "EN"],
+  [/\b(eurocity|ec)\b/i, "EC"],
+  [/\b(icn)\b/i, "ICN"],
+  [/\b(intercity|ic)\b/i, "IC"],
+  [/\b(interregio|ir)\b/i, "IR"],
+  [/\b(regio\s*express|regioexpress|re)\b/i, "RE"],
+  [/\b(ter)\b/i, "TER"],
+  [/\b(s-bahn)\b/i, "S"],
+];
+// Füllwörter, die nicht zum Bahnhofsnamen gehören ("am", "in" bewusst nicht: Frankfurt am Main, Weil am Rhein)
+const STOP_WORDS = new Set(("unterwegs ist sind der die das den dem im jetzt gerade grad momentan aktuell heute " +
+  "fährt fahrt faehrt fahren fahrende läuft bitte zug zuges currently now today is running please train").split(/\s+/));
+
+function parseQuery(raw){
+  const text = raw.replace(/[«»"“”„?!]/g," ").replace(/\s+/g," ").trim();
+  const out = {type:null, number:null, from:null, to:null};
+  for (const [re,t] of TYPE_ALIASES){ if (re.test(text)){ out.type=t; break; } }
+  const num = text.match(/\b(?:tgv|lyria|ice|ic|ec|ir|re|rj|rjx|nj|en|ter|icn|ouigo|zug|nr\.?|nummer)\s*(\d{2,6})\b/i) || text.match(/\b(\d{3,6})\b/);
+  if (num) out.number = String(parseInt(num[1],10));
+
+  let m = text.match(/\bzwischen\s+(.+?)\s+und\s+(.+)$/i);
+  if (!m) m = text.match(/\b(?:von|ab|from|depuis)\s+(.+?)\s+(?:nach|bis|to|à|vers|richtung)\s+(.+)$/i);
+  if (!m) m = text.match(/^(.+?)\s*(?:→|->|–|—| - )\s*(.+)$/);
+  if (!m) m = text.match(/^(.+?)\s+(?:nach|to)\s+(.+)$/i);
+  if (m){ out.from = cleanStation(m[1], true); out.to = cleanStation(m[2], false); }
+  return out;
+}
+function cleanStation(s, isFrom){
+  let words = s.split(" ").filter(Boolean);
+  if (isFrom){
+    // alles vor dem letzten Füllwort am Anfang entfernen (z. B. "den TGV der im Moment")
+    while (words.length && (STOP_WORDS.has(words[0].toLowerCase()) || /^(tgv|lyria|ice|ic|ec|ir|re|ter|moment)$/i.test(words[0]))) words.shift();
+  } else {
+    const cut = words.findIndex(w => STOP_WORDS.has(w.toLowerCase().replace(/[.,;:]$/,"")));
+    if (cut > 0) words = words.slice(0, cut);
+  }
+  return words.join(" ").replace(/[.,;:]+$/,"").trim() || null;
+}
+
+/* ---------- Zeiten ---------- */
+const toDate = s => s ? new Date(s.replace(/([+-]\d{2})(\d{2})$/,"$1:$2")) : null;
+const fmt = d => d ? d.toLocaleTimeString("de-CH",{hour:"2-digit",minute:"2-digit",timeZone:TZ}) : "–";
+const pad = n => String(n).padStart(2,"0");
+function zurichParts(d){
+  const p = new Intl.DateTimeFormat("sv-SE",{timeZone:TZ,year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",hour12:false}).format(d);
+  const [date,time] = p.split(" ");
+  return {date, time};
+}
+function minutesTxt(min){
+  if (min < 1) return "< 1 Min.";
+  if (min < 60) return Math.round(min)+" Min.";
+  const h = Math.floor(min/60), m = Math.round(min%60);
+  return h+" h "+pad(m)+" Min.";
+}
+
+/* ---------- Datenmodell ---------- */
+// Wandelt eine Section (journey + passList) in eine Liste von Halten mit erwarteten Zeiten.
+function buildTrip(section){
+  const j = section.journey;
+  let lastDelay = null; let realtime = false;
+  const stops = j.passList.map(p => {
+    const c = p.station && p.station.coordinate;
+    const schedArr = toDate(p.arrival), schedDep = toDate(p.departure);
+    const prog = p.prognosis || {};
+    let arr = toDate(prog.arrival), dep = toDate(prog.departure);
+    if (typeof p.delay === "number") { lastDelay = p.delay; realtime = true; }
+    const d = (lastDelay||0) * 60000;
+    if (!arr && schedArr) arr = new Date(schedArr.getTime()+d);
+    if (!dep && schedDep) dep = new Date(schedDep.getTime()+d);
+    if (prog.arrival || prog.departure) realtime = true;
+    return { name:p.station.name, id:p.station.id, lat:c&&c.x, lon:c&&c.y,
+             schedArr, schedDep, arr, dep, delay:p.delay, platform:p.platform };
+  }).filter(s => typeof s.lat === "number" && typeof s.lon === "number");
+  const first = stops[0], last = stops[stops.length-1];
+  return {
+    key: (j.name||"")+"|"+(first && first.schedDep ? first.schedDep.toISOString() : ""),
+    category: j.category||"", number: j.number||"", name: j.name||"",
+    label: (j.category||"Zug")+" "+(j.name ? String(parseInt(j.name,10)||j.name) : ""),
+    operator: j.operator||"", dest: j.to||"", stops, realtime,
+    start: first && (first.dep||first.schedDep), end: last && (last.arr||last.schedArr)
+  };
+}
+
+// Position zum Zeitpunkt now
+function positionAt(trip, now){
+  const S = trip.stops; const t = now.getTime();
+  if (!S.length) return null;
+  if (t < S[0].dep) return {state:"before", lat:S[0].lat, lon:S[0].lon, idx:0, progress:0};
+  for (let i=0;i<S.length;i++){
+    const a = S[i].arr ? S[i].arr.getTime() : null, d = S[i].dep ? S[i].dep.getTime() : null;
+    if (a!==null && d!==null && t>=a && t<=d) return {state:"station", lat:S[i].lat, lon:S[i].lon, idx:i, next:i+1<S.length?i+1:null, progress:progressFrac(trip,t)};
+    if (i+1<S.length){
+      const d0 = d ?? a, a1 = S[i+1].arr ?? S[i+1].dep;
+      if (d0 && a1 && t>=d0 && t<a1){
+        const f = (t-d0)/(a1-d0);
+        return {state:"moving", lat:S[i].lat+(S[i+1].lat-S[i].lat)*f, lon:S[i].lon+(S[i+1].lon-S[i].lon)*f, idx:i, next:i+1, frac:f, progress:progressFrac(trip,t)};
+      }
+    }
+  }
+  const L = S[S.length-1];
+  return {state:"arrived", lat:L.lat, lon:L.lon, idx:S.length-1, progress:1};
+}
+function progressFrac(trip,t){
+  const s = trip.start.getTime(), e = trip.end.getTime();
+  return Math.min(1, Math.max(0, (t-s)/(e-s)));
+}
+
+/* ---------- API ---------- */
+async function api(path, params){
+  const u = new URL(API + path);
+  for (const [k,v] of Object.entries(params)) if (v!==null && v!==undefined) u.searchParams.append(k, v);
+  const r = await fetch(u.toString());
+  if (r.status === 429) throw new Error("Die Datenquelle bremst gerade (zu viele Anfragen). Bitte kurz warten.");
+  if (!r.ok) throw new Error("Datenquelle antwortet mit Fehler "+r.status+".");
+  return r.json();
+}
+
+// Sucht alle Fahrten, die jetzt zwischen from und to unterwegs sind.
+async function findRunning(q, now){
+  // 1) typische Fahrzeit ermitteln
+  const nowP = zurichParts(now);
+  const probe = await api("/connections", {from:q.from, to:q.to, date:nowP.date, time:nowP.time, limit:1});
+  if (!probe.connections || !probe.connections.length) {
+    const err = new Error("Keine Verbindung gefunden. Sind die Bahnhofsnamen richtig geschrieben?");
+    err.stations = probe; throw err;
+  }
+  const resolved = {from: probe.from && probe.from.name, to: probe.to && probe.to.name};
+  const durMin = parseDuration(probe.connections[0].duration) || 180;
+  const lookbackMin = Math.min(durMin + 90, 14*60);
+
+  // 2) Verbindungen ab (jetzt - Fahrzeit) laden, bis sie in der Zukunft liegen
+  const startP = zurichParts(new Date(now.getTime() - lookbackMin*60000));
+  const trips = new Map(); const upcoming = [];
+  for (let page=0; page<4; page++){
+    const res = await api("/connections", {from:q.from, to:q.to, date:startP.date, time:startP.time, limit:6, page});
+    const conns = res.connections || [];
+    if (!conns.length) break;
+    let reachedFuture = false;
+    for (const c of conns){
+      for (const s of (c.sections||[])){
+        if (!s.journey || !s.journey.passList || s.journey.passList.length < 2) continue;
+        const trip = buildTrip(s);
+        if (!trip.start || !trip.end) continue;
+        if (!trips.has(trip.key)) trips.set(trip.key, trip);
+      }
+      const dep = toDate(c.from && (c.from.prognosis && c.from.prognosis.departure || c.from.departure));
+      if (dep && dep > now){ reachedFuture = true; upcoming.push(c); }
+    }
+    if (reachedFuture) break;
+  }
+  const all = [...trips.values()];
+  const typeOk = t => !q.type || t.category.toUpperCase() === q.type || (q.type==="TGV" && /TGV|LYR/i.test(t.category));
+  const numOk  = t => !q.number || String(parseInt(t.name,10)) === q.number || t.number === q.number;
+  const running = all.filter(t => typeOk(t) && numOk(t) && t.start <= now && t.end >= now);
+  const nextDeps = all.filter(t => typeOk(t) && t.start > now).sort((a,b)=>a.start-b.start).slice(0,3);
+  return {running, nextDeps, resolved, durMin};
+}
+function parseDuration(s){ // "00d03:04:00"
+  const m = s && s.match(/(\d+)d(\d+):(\d+)/); return m ? (+m[1])*1440+(+m[2])*60+(+m[3]) : null;
+}
+
+/* ---------- Karte ---------- */
+const map = L.map("map",{zoomControl:true}).setView([47.2,5.5],6);
+L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,
+  attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
+let layer = L.layerGroup().addTo(map);
+const trainMarkers = new Map();
+
+/* ---------- Zustand & Darstellung ---------- */
+const $ = id => document.getElementById(id);
+let state = {q:null, trips:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null};
+let refreshTimer = null, tickTimer = null;
+
+function drawRoutes(){
+  layer.clearLayers(); trainMarkers.clear();
+  const sel = state.trips.find(t=>t.key===state.sel) || state.trips[0];
+  for (const t of state.trips){
+    const isSel = t === sel;
+    const pts = t.stops.map(s=>[s.lat,s.lon]);
+    L.polyline(pts,{color:isSel?"#005064":"#46bdcf",weight:isSel?4:3,opacity:isSel?.85:.5,dashArray:isSel?null:"6 6"}).addTo(layer);
+    if (isSel){
+      t.stops.forEach((s,i)=>{
+        L.circleMarker([s.lat,s.lon],{radius:i===0||i===t.stops.length-1?6:4.5,color:"#005064",weight:2,fillColor:"#fff",fillOpacity:1})
+          .bindTooltip(`<b>${esc(s.name)}</b><br>an ${fmt(s.arr)} · ab ${fmt(s.dep)}`).addTo(layer);
+      });
+    }
+    const icon = L.divIcon({className:"train-icon"+(isSel?"":" other"),html:"🚆",iconSize:[34,34],iconAnchor:[17,17]});
+    const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:isSel?1000:0}).addTo(layer)
+      .bindTooltip(esc(t.label),{permanent:isSel,direction:"top",offset:[0,-18],className:"trainlbl"})
+      .on("click",()=>select(t.key));
+    trainMarkers.set(t.key, mk);
+  }
+  if (sel){
+    map.fitBounds(L.latLngBounds(sel.stops.map(s=>[s.lat,s.lon])).pad(0.15));
+  }
+}
+
+function tick(){
+  const now = new Date();
+  for (const t of state.trips){
+    const p = positionAt(t, now); const mk = trainMarkers.get(t.key);
+    if (p && mk) mk.setLatLng([p.lat,p.lon]);
+  }
+  renderCards(now);
+}
+
+function delayBadge(t, p){
+  if (!t.realtime) return `<span class="badge na">nur Fahrplan</span>`;
+  const ref = t.stops[p && p.next!=null ? p.next : (p?p.idx:0)] || t.stops[0];
+  const d = ref && typeof ref.delay === "number" ? ref.delay : null;
+  if (d === null) return `<span class="badge na">ohne Prognose</span>`;
+  return d > 0 ? `<span class="badge late">+${d} Min.</span>` : `<span class="badge ok">pünktlich</span>`;
+}
+
+function renderCards(now){
+  const box = $("results");
+  if (!state.q) return;
+  let html = "";
+  if (!state.trips.length){
+    html += `<div class="empty">Im Moment ist kein passender Zug ${state.q.type?("(<b>"+esc(state.q.type)+"</b>) "):""}zwischen <b>${esc(state.resolved?.from||state.q.from)}</b> und <b>${esc(state.resolved?.to||state.q.to)}</b> unterwegs.</div>`;
+    if (state.nextDeps.length){
+      html += `<div class="small" style="margin-top:8px">Nächste Abfahrten:</div><ul class="list">` +
+        state.nextDeps.map(t=>`<li><b>${esc(t.label)}</b> ab ${fmt(t.start)} → an ${fmt(t.end)}</li>`).join("") + `</ul>`;
+    }
+    box.innerHTML = html; return;
+  }
+  for (const t of state.trips){
+    const p = positionAt(t, now);
+    const sel = t.key === (state.sel || state.trips[0].key);
+    const next = p && p.next!=null ? t.stops[p.next] : null;
+    let where;
+    if (p.state==="station") where = `Hält in <b>${esc(t.stops[p.idx].name)}</b>`;
+    else if (p.state==="moving") where = `Zwischen <b>${esc(t.stops[p.idx].name)}</b> und <b>${esc(t.stops[p.next].name)}</b>`;
+    else if (p.state==="before") where = `Noch nicht abgefahren`;
+    else where = `Angekommen in <b>${esc(t.stops[t.stops.length-1].name)}</b>`;
+    const last = t.stops[t.stops.length-1];
+    const remain = (t.end - now)/60000;
+    html += `<div class="card ${sel?"sel":""}" data-key="${esc(t.key)}">
+      <div class="t"><span class="name">${esc(t.label)}</span>${delayBadge(t,p)}</div>
+      <div class="sub">Richtung ${esc(t.dest)}${t.operator?" · "+esc(t.operator):""}</div>
+      <div class="bar"><i style="width:${(p.progress*100).toFixed(1)}%"></i></div>
+      <div class="sub">${where}</div>
+      <dl class="kv">
+        ${next?`<dt>Nächster Halt</dt><dd>${esc(next.name)} · ${fmt(next.arr||next.dep)}</dd>`:""}
+        <dt>Ankunft ${esc(last.name)}</dt><dd>${fmt(last.arr)}${remain>0?" (in "+minutesTxt(remain)+")":""}${last.platform?" · Gleis "+esc(last.platform):""}</dd>
+      </dl>
+      ${sel?stopList(t,p):""}
+    </div>`;
+  }
+  const fa = state.fetchedAt ? `Daten von ${fmt(state.fetchedAt)}, automatische Aktualisierung jede Minute.` : "";
+  box.innerHTML = html + `<div class="small">${fa}</div>`;
+  box.querySelectorAll(".card").forEach(el=>el.onclick=()=>select(el.dataset.key));
+}
+function stopList(t,p){
+  return `<ul class="stops">` + t.stops.map((s,i)=>{
+    const cls = i < (p.state==="moving"?p.idx+1:p.idx) || p.state==="arrived" ? "past" : (p.state==="station"&&i===p.idx ? "cur" : "");
+    const sched = s.schedArr||s.schedDep, exp = s.arr||s.dep;
+    const late = sched && exp && (exp-sched) >= 60000;
+    return `<li class="${cls}"><span class="d"></span><span>${esc(s.name)}</span>
+      <span class="tm">${late?`<s>${fmt(sched)}</s>`:""}${fmt(exp)}</span></li>`;
+  }).join("") + `</ul>`;
+}
+function select(key){ state.sel = key; drawRoutes(); tick(); }
+function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function setStatus(msg, err){ const el=$("status"); el.textContent = msg||""; el.className = "status"+(err?" err":""); }
+
+async function run(text, {silent=false}={}){
+  const q = parseQuery(text);
+  $("parsed").innerHTML = q.from && q.to
+    ? `Erkannt: <b>${esc(q.type||"jeder Zug")}</b>${q.number?" Nr. <b>"+esc(q.number)+"</b>":""} · von <b>${esc(q.from)}</b> nach <b>${esc(q.to)}</b>`
+    : "";
+  if (!q.from || !q.to){
+    setStatus("Ich habe Start und Ziel nicht erkannt. Schreib z. B. «TGV von Paris Gare de Lyon nach Basel SBB».", true);
+    return;
+  }
+  if (!silent){ setStatus("Suche läuft …"); $("go").disabled = true; }
+  try{
+    const now = new Date();
+    const r = await findRunning(q, now);
+    const prevSel = state.sel;
+    state = {q, trips:r.running, nextDeps:r.nextDeps, sel: r.running.some(t=>t.key===prevSel)?prevSel:(r.running[0]&&r.running[0].key), fetchedAt:now, resolved:r.resolved};
+    setStatus(r.running.length
+      ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} unterwegs: ${r.resolved.from} → ${r.resolved.to}`
+      : "");
+    drawRoutes(); tick();
+    document.body.classList.add("has-results");
+    if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
+    try{ history.replaceState(null,"","?q="+encodeURIComponent(text)); }catch(e){}
+  }catch(e){
+    if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
+  }finally{ $("go").disabled = false; }
+  clearInterval(refreshTimer); clearInterval(tickTimer);
+  if (state.q){
+    refreshTimer = setInterval(()=>run(text,{silent:true}), REFRESH_MS);
+    tickTimer = setInterval(tick, TICK_MS);
+  }
+}
+
+/* ---------- Start ---------- */
+const EXAMPLES = [
+  "TGV von Paris Gare de Lyon nach Basel SBB",
+  "ICE von Basel SBB nach Frankfurt (Main) Hbf",
+  "IC von Zürich HB nach Bern",
+  "EC von Zürich HB nach Milano Centrale",
+];
+$("chips").innerHTML = EXAMPLES.map(e=>`<button type="button" class="chip">${esc(e)}</button>`).join("");
+$("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ $("q").value=b.textContent; run(b.textContent); });
+$("f").addEventListener("submit", ev=>{ ev.preventDefault(); run($("q").value); });
+$("q").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); run($("q").value); }});
+const initial = new URLSearchParams(location.search).get("q");
+if (initial){ $("q").value = initial; run(initial); }
+
+// für Tests
+window.__zt = {parseQuery, positionAt, buildTrip};
+</script>
+</body>
+</html>
