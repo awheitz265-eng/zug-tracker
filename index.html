@@ -11,113 +11,141 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
+/* Layout: Steuerpult links (gebürstetes Metall), Karte rechts; alles rechtwinklig, klare Kanten. */
 :root{
   --blue:#005064; --orange:#f07c01; --navy:#253c48; --taupe:#918277; --teal:#027987; --sky:#46bdcf;
-  --bg:#f4f6f7; --panel:#ffffff; --text:#1d2b33; --muted:#5f6d74; --line:#dde3e6;
-  --ok:#027987; --warn:#f07c01; --bad:#c0392b; --name:#005064;
-  --radius:14px;
+  --bg:#eaf7fa; --panel:#ffffff; --panel2:#f1fafc; --text:#152a33; --muted:#4f6670; --line:#a9d9e2; --line2:#d6eef3;
+  --hi:rgba(255,255,255,.85); --lo:rgba(0,30,40,.18);
+  --ok:#027987; --warn:#d96d00; --bad:#c62828; --name:#027987;
+  --steel:linear-gradient(180deg,#ffffff 0%,#f0fafc 48%,#e0f3f7 52%,#f3fbfd 100%);
+  --brushed:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,rgba(0,0,0,.035) 1px 2px,rgba(255,255,255,0) 2px 4px);
+  --chrome-blue:linear-gradient(180deg,#3fb6c8 0%,#1fa5b8 45%,#058c9c 55%,#027987 100%);
+  --chrome-orange:linear-gradient(180deg,#ffb25c 0%,#ff8f1f 46%,#f07c01 54%,#ff9a33 100%);
+  --mono:"Nunito Sans",system-ui,sans-serif;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#0f1a20; --panel:#16252d; --text:#e6eef1; --muted:#9db0b8; --line:#2a3c46; --name:#46bdcf; --bad:#ff6b5b;
+    --bg:#16262f; --panel:#1d313b; --panel2:#182b34; --text:#eaf6f9; --muted:#9fc0c9; --line:#2f5563; --line2:#25444f;
+    --hi:rgba(255,255,255,.1); --lo:rgba(0,0,0,.45); --name:#46bdcf; --bad:#ff6b5b; --warn:#ffa53f;
+    --steel:linear-gradient(180deg,#2a4653 0%,#213a45 48%,#1b323c 52%,#233e49 100%);
+    color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#0f1a20; --panel:#16252d; --text:#e6eef1; --muted:#9db0b8; --line:#2a3c46; --name:#46bdcf; --bad:#ff6b5b;
+  --bg:#16262f; --panel:#1d313b; --panel2:#182b34; --text:#eaf6f9; --muted:#9fc0c9; --line:#2f5563; --line2:#25444f;
+  --hi:rgba(255,255,255,.1); --lo:rgba(0,0,0,.45); --name:#46bdcf; --bad:#ff6b5b; --warn:#ffa53f;
+  --steel:linear-gradient(180deg,#2a4653 0%,#213a45 48%,#1b323c 52%,#233e49 100%);
+  color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--text);font-family:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4}
-.app{display:grid;grid-template-columns:410px 1fr;height:100%;height:100dvh}
-aside{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;z-index:2}
-header{background:var(--blue);color:#fff;padding:14px 16px 12px}
-header h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.2px;display:flex;align-items:center;gap:8px}
-header h1 .dot{width:10px;height:10px;border-radius:50%;background:var(--orange);animation:pulse 2s infinite}
-@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(240,124,1,.7)}70%{box-shadow:0 0 0 9px rgba(240,124,1,0)}100%{box-shadow:0 0 0 0 rgba(240,124,1,0)}}
+.app{display:grid;grid-template-columns:420px 1fr;height:100%;height:100dvh}
+aside{background:var(--brushed),var(--panel);border-right:3px solid var(--sky);display:flex;flex-direction:column;min-height:0;z-index:2;box-shadow:4px 0 14px rgba(0,0,0,.18)}
+/* Kopf: verchromtes Dunkelblau mit Orange-Kante */
+header{background:var(--brushed),var(--chrome-blue);color:#fff;padding:14px 16px 12px;border-bottom:3px solid var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
+header h1{margin:0;font-size:18px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:10px;text-shadow:0 1px 2px rgba(0,60,70,.55)}
+header h1 .dot{width:10px;height:10px;background:var(--orange);transform:rotate(45deg);box-shadow:0 0 0 2px rgba(255,255,255,.25);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
 @media (prefers-reduced-motion: reduce){header h1 .dot{animation:none}}
-header p{margin:4px 0 0;font-size:13px;opacity:.85}
-form{padding:14px 16px 8px;border-bottom:1px solid var(--line)}
-textarea{width:100%;min-height:64px;resize:vertical;border:1.5px solid var(--line);border-radius:10px;padding:10px 12px;font:inherit;background:var(--bg);color:var(--text)}
-textarea:focus{outline:none;border-color:var(--teal)}
+header p{margin:4px 0 0;font-size:12.5px;opacity:.95;letter-spacing:.02em;text-shadow:0 1px 1px rgba(0,60,70,.5)}
+form{padding:14px 16px 10px;border-bottom:1px solid var(--line);background:var(--panel2)}
+textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--line);border-radius:0;padding:10px 12px;font:inherit;background:var(--panel);color:var(--text);box-shadow:inset 0 2px 3px var(--lo)}
+textarea:focus{outline:none;border-color:var(--teal);box-shadow:inset 0 2px 3px var(--lo),0 0 0 2px rgba(2,121,135,.35)}
 .row{display:flex;gap:8px;margin-top:8px;align-items:center}
-button{font:inherit;cursor:pointer;border:0;border-radius:10px;color:inherit}
-button:focus-visible,.card:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
-.primary{background:var(--orange);color:#fff;font-weight:700;padding:10px 16px;flex:1}
+button{font:inherit;cursor:pointer;border:0;border-radius:0;color:inherit}
+button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+.primary{background:var(--chrome-orange);color:#fff;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:13.5px;padding:11px 16px;flex:1;border:1px solid #b85e00;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 0 rgba(0,0,0,.18);text-shadow:0 1px 0 rgba(0,0,0,.25)}
+.primary:hover{filter:brightness(1.05)}
+.primary:active{transform:translateY(1px);box-shadow:inset 0 1px 3px rgba(0,0,0,.3)}
 .primary:disabled{opacity:.6;cursor:wait}
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.chip{background:transparent;border:1px solid var(--line);color:var(--muted);padding:4px 10px;font-size:12.5px;border-radius:999px}
+.chip{background:var(--steel);border:1px solid var(--line);color:var(--text);padding:4px 9px;font-size:12px;font-weight:600;box-shadow:inset 0 1px 0 var(--hi)}
 .chip:hover{border-color:var(--teal);color:var(--teal)}
 .content{overflow:auto;padding:12px 16px 20px;flex:1;min-height:0}
-.status{font-size:13.5px;color:var(--muted);margin:2px 0 10px}
+.status{font-size:13px;color:var(--muted);margin:2px 0 10px;font-weight:600}
 .status.err{color:var(--bad)}
-.parsed{font-size:12.5px;color:var(--muted);margin-bottom:10px}
+.parsed{font-size:11.5px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
 .parsed b{color:var(--text)}
-.card{border:1px solid var(--line);border-radius:var(--radius);padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--panel);transition:border-color .15s}
-.card:hover{border-color:var(--sky)}
-.card.sel{border-color:var(--orange);box-shadow:0 0 0 1px var(--orange)}
-.card .t{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.card .name{font-weight:800;font-size:16px;color:var(--name)}
-.tag{font-size:11px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:var(--teal);margin-left:6px}
-.badge{font-size:12px;font-weight:700;padding:2px 8px;border-radius:999px;white-space:nowrap}
-.badge.ok{background:rgba(2,121,135,.14);color:var(--ok)}
-.badge.late{background:rgba(240,124,1,.16);color:var(--warn)}
-.badge.na{background:rgba(145,130,119,.18);color:var(--taupe)}
-.badge.bad{background:rgba(192,57,43,.14);color:var(--bad)}
+/* Fahrt-Karten: Metallplatte, rechtwinklig, Akzentkante bei Auswahl */
+.card{border:1px solid var(--line);border-radius:0;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--steel);box-shadow:inset 0 1px 0 var(--hi),0 1px 2px var(--lo);position:relative}
+.card:hover{border-color:var(--teal)}
+.card.sel{border-color:var(--teal);box-shadow:inset 4px 0 0 var(--orange),inset 0 1px 0 var(--hi),0 3px 10px var(--lo)}
+.card .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.card .name{font-weight:800;font-size:17px;letter-spacing:.04em;color:var(--name);text-transform:uppercase}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#fff;background:var(--teal);padding:1px 5px;margin-left:8px;vertical-align:middle}
+.badge{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;white-space:nowrap;border:1px solid currentColor}
+.badge.ok{color:var(--ok);background:rgba(2,121,135,.08)}
+.badge.late{color:var(--warn);background:rgba(240,124,1,.1)}
+.badge.na{color:var(--muted);background:transparent}
+.badge.bad{color:#fff;background:var(--bad);border-color:var(--bad)}
 .sub{color:var(--muted);font-size:13px;margin-top:2px}
-.bar{height:6px;background:var(--line);border-radius:3px;margin:10px 0 6px;overflow:hidden}
-.bar>i{display:block;height:100%;background:linear-gradient(90deg,var(--teal),var(--orange));border-radius:3px}
-.kv{display:grid;grid-template-columns:auto 1fr;gap:2px 12px;font-size:13.5px;margin-top:6px}
-.kv dt{color:var(--muted)}
-.kv dd{margin:0;font-weight:600}
-.alert{margin-top:8px;border-left:3px solid var(--bad);padding:4px 8px;font-size:13px;background:rgba(192,57,43,.07);border-radius:0 6px 6px 0}
-.alert b{display:block}
-.stops{list-style:none;padding:0;margin:10px 0 0;border-top:1px dashed var(--line)}
-.stops li{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;padding:5px 4px;font-size:13.5px;border-radius:6px}
-.stops li:hover{background:rgba(70,189,207,.12)}
-.stops li .d{width:10px;height:10px;border-radius:50%;border:2px solid var(--teal);background:var(--panel)}
+.bar{height:8px;background:var(--panel2);border:1px solid var(--line);margin:10px 0 6px;overflow:hidden;box-shadow:inset 0 1px 2px var(--lo)}
+.bar>i{display:block;height:100%;background:repeating-linear-gradient(90deg,rgba(255,255,255,.25) 0 2px,transparent 2px 8px),var(--chrome-orange)}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line2)}
+.kv dt{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.08em;font-weight:700;padding-top:2px}
+.kv dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
+.alert{margin-top:8px;border-left:4px solid var(--bad);padding:5px 8px;font-size:13px;background:rgba(179,38,30,.08)}
+.alert b{display:block;text-transform:uppercase;font-size:11.5px;letter-spacing:.06em;color:var(--bad)}
+.stops{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
+.stops li{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;padding:6px 4px;font-size:13.5px;border-bottom:1px solid var(--line2);cursor:pointer}
+.stops li:hover{background:rgba(70,189,207,.14)}
+.stops li .d{width:9px;height:9px;border:2px solid var(--teal);background:var(--panel)}
 .stops li.past{color:var(--muted)}
 .stops li.past .d{background:var(--teal)}
-.stops li.cur .d{background:var(--orange);border-color:var(--orange)}
+.stops li.cur .d{background:var(--orange);border-color:var(--orange);transform:rotate(45deg)}
 .stops li.cxl{color:var(--bad);text-decoration:line-through}
-.stops .tm{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap}
-.stops .tm s{color:var(--muted);margin-right:4px}
-.stops .cx{font-size:11.5px;color:var(--teal);font-weight:700;margin-left:4px;white-space:nowrap}
-.hint{font-size:12px;color:var(--muted);margin-top:6px}
-.note{font-size:12px;color:var(--muted);border-top:1px solid var(--line);padding:10px 16px;line-height:1.4}
+.stops .tm{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;font-weight:700}
+.stops .tm s{color:var(--muted);margin-right:4px;font-weight:400}
+.stops .cx{font-size:10.5px;color:#fff;background:var(--teal);font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-left:6px;padding:1px 5px;white-space:nowrap}
+.hint{font-size:11.5px;color:var(--muted);margin-top:6px}
+.note{font-size:11.5px;color:var(--muted);border-top:3px solid var(--sky);padding:9px 16px;line-height:1.4;background:var(--panel2)}
 .note a{color:var(--teal)}
-#map{height:100%;width:100%;background:#dfe7ea}
-.train-icon{background:var(--orange);color:#fff;border:3px solid #fff;border-radius:50%;width:34px!important;height:34px!important;display:flex;align-items:center;justify-content:center;box-shadow:0 2px 10px rgba(0,0,0,.35);font-size:17px}
-.train-icon.other{background:var(--blue)}
-.train-icon.extra{background:var(--teal)}
-.leaflet-tooltip.trainlbl{font-family:"Nunito Sans",sans-serif;font-weight:800;color:#005064;border-radius:8px;padding:3px 8px}
+#map{height:100%;width:100%;background:#dff2f6}
+/* Karte etwas entsättigt, damit die Strecke klar heraussticht */
+.leaflet-tile-pane{filter:grayscale(.35) saturate(1.1) brightness(1.04)}
+.leaflet-bar{border-radius:0!important;border:1px solid #7d8b92!important;box-shadow:0 2px 6px rgba(0,0,0,.25)!important}
+.leaflet-bar a{border-radius:0!important;background:linear-gradient(180deg,#fbfcfc,#dfe5e8)!important;color:#14232b!important}
+/* Zug-Marker: quadratische Metallplakette */
+.train-icon{background:var(--chrome-orange);color:#fff;border:2px solid #fff;outline:1px solid #8a4700;width:32px!important;height:32px!important;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.45);font-size:16px}
+.train-icon.other{background:var(--chrome-blue);outline-color:#015a64}
+.train-icon.extra{background:linear-gradient(180deg,#0aa0b3,#027987 50%,#01606b 52%,#028392);outline-color:#014a52}
+.leaflet-tooltip.trainlbl{font-family:"Nunito Sans",sans-serif;font-weight:800;letter-spacing:.06em;color:#fff;background:#027987;border:1px solid #015a64;border-radius:0;padding:3px 8px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
+.leaflet-tooltip.trainlbl::before{border-top-color:#027987}
+.leaflet-tooltip{border-radius:0}
 .leaflet-container{font-family:"Nunito Sans",sans-serif}
-.platchg{background:var(--orange);color:#fff;padding:0 6px;border-radius:5px}
+.stopsq{background:#fff;border:2px solid #027987;box-shadow:0 1px 3px rgba(0,0,0,.35)}
+.stopsq.end{background:#f07c01;border-color:#fff;outline:1px solid #c66300}
+.stopsq.cxl{border-color:#b3261e}
+.platchg{background:var(--orange);color:#fff;padding:0 5px;font-weight:800}
 .empty{color:var(--muted);font-size:14px;padding:6px 0}
-.small{font-size:12.5px;color:var(--muted)}
+.small{font-size:12px;color:var(--muted)}
 .list{font-size:13.5px;margin:6px 0 0;padding-left:18px}
-/* Anschlüsse */
-#onward{margin-top:14px}
-.ow-head{display:flex;justify-content:space-between;align-items:baseline;gap:8px;border-top:2px solid var(--blue);padding-top:10px}
-.ow-head h2{font-size:16px;margin:0;font-weight:800;color:var(--name)}
-.ow-close{background:transparent;color:var(--muted);font-size:13px;padding:2px 6px}
-.tabs{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
-.tab{border:1px solid var(--line);background:transparent;color:var(--muted);padding:4px 10px;font-size:13px;border-radius:999px}
-.tab.on{background:var(--blue);border-color:var(--blue);color:#fff}
+/* Anschlüsse: Abfahrtstafel */
+#onward{margin-top:16px}
+.ow-head{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--brushed),var(--chrome-blue);color:#fff;padding:8px 10px;border-bottom:3px solid var(--orange)}
+.ow-head h2{font-size:13.5px;margin:0;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
+.ow-close{white-space:nowrap;flex:none;background:transparent;color:#fff;font-size:12px;padding:2px 6px;border:1px solid rgba(255,255,255,.5);letter-spacing:.06em;text-transform:uppercase}
+#onward > .small{margin-top:6px}
+.tabs{display:flex;gap:0;flex-wrap:nowrap;overflow-x:auto;margin:8px 0;border:1px solid var(--line)}
+.tab{flex:1 0 auto;border-right:1px solid var(--line);background:var(--steel);color:var(--text);padding:6px 6px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;box-shadow:inset 0 1px 0 var(--hi)}
+.tab:last-child{border-right:0}
+.tab.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 4px rgba(0,0,0,.35)}
 .tab:disabled{opacity:.4;cursor:default}
-.dep{display:grid;grid-template-columns:52px 64px 1fr auto;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line);font-size:13.5px;cursor:pointer;border-radius:6px}
-.dep:hover{background:rgba(70,189,207,.12)}
-.dep .tm{font-variant-numeric:tabular-nums;font-weight:700}
+.dep{display:grid;grid-template-columns:52px 64px 1fr auto;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line2);font-size:13.5px;cursor:pointer}
+.dep:hover{background:rgba(70,189,207,.14)}
+.dep .tm{font-variant-numeric:tabular-nums;font-weight:800}
 .dep .tm s{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
-.line{display:inline-block;min-width:44px;text-align:center;font-weight:800;font-size:12.5px;padding:2px 6px;border-radius:6px;background:var(--navy);color:#fff}
+.line{display:inline-block;min-width:46px;text-align:center;font-weight:800;font-size:12.5px;padding:2px 6px;background:var(--teal);color:#fff;letter-spacing:.03em;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
 .dep .to{min-width:0}
 .dep .to b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dep .to span{font-size:12px;color:var(--muted)}
-.dep .pl{font-size:12.5px;text-align:right;white-space:nowrap}
+.dep .pl{font-size:12.5px;text-align:right;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
 .dep.cxl .to b,.dep.cxl .tm{color:var(--bad);text-decoration:line-through}
 @media (max-width:760px){
   .app{grid-template-columns:1fr;grid-template-rows:42vh 1fr}
   .mapwrap{order:-1}
-  aside{border-right:0;border-top:1px solid var(--line);overflow:auto}
+  aside{border-right:0;border-top:2px solid var(--navy);overflow:auto}
   .content{overflow:visible;flex:none}
   body.has-results .chips{display:none}
   header{padding:10px 16px}
@@ -481,13 +509,19 @@ async function findRunning(q, now){
     }
     if (reachedFuture) break;
   }
-  const all = [...trips.values()];
+  // nur Direktfahrten: erster Halt = Start, letzter Halt = Ziel (keine Zubringer mit Umstieg)
+  const sameSt = (s, st) => !!(s && st && ((s.id && st.id && String(s.id)===String(st.id)) || (s.name && st.name && s.name===st.name)));
+  const isDirect = t => sameSt(t.stops[0], probe.from) && sameSt(t.stops[t.stops.length-1], probe.to);
+  const everything = [...trips.values()];
+  const all = everything.filter(isDirect);
+  const partial = everything.filter(t => !isDirect(t));
   const typeOk = t => !q.type || t.category.toUpperCase() === q.type || (q.type==="TGV" && /TGV|LYR/i.test(t.category));
   const numOk  = t => !q.number || String(parseInt(t.name,10)) === q.number || t.number === q.number;
   const running = all.filter(t => typeOk(t) && numOk(t) && t.start <= now && t.end >= now);
   const nextDeps = all.filter(t => typeOk(t) && t.start > now).sort((a,b)=>a.start-b.start).slice(0,3);
+  const viaTransfer = partial.filter(t => typeOk(t) && numOk(t) && t.start <= now && t.end >= now);
   await Promise.all(running.map(enrich));       // Gleisverlauf & weitere Echtzeit ergänzen
-  return {running, nextDeps, resolved};
+  return {running, nextDeps, resolved, viaTransfer};
 }
 function parseDuration(s){ const m = s && s.match(/(\d+)d(\d+):(\d+)/); return m ? (+m[1])*1440+(+m[2])*60+(+m[3]) : null; }
 
@@ -556,19 +590,19 @@ function drawRoutes(fit){
   for (const t of allTrips()){
     const isSel = t === sel;
     const pts = t.geom || t.stops.map(s=>[s.lat,s.lon]);
-    L.polyline(pts,{color:isSel?"#005064":(t.src==="tx"&&!t.fromSearch?"#027987":"#46bdcf"),weight:isSel?4:3,opacity:isSel?.85:.55,dashArray:isSel?null:"6 6"}).addTo(layer);
+    L.polyline(pts,{color:isSel?"#027987":(t.src==="tx"&&!t.fromSearch?"#46bdcf":"#46bdcf"),weight:isSel?5:3,opacity:isSel?.95:.6,lineCap:"butt",lineJoin:"miter",dashArray:isSel?null:"6 6"}).addTo(layer);
     if (isSel){
-      passedLine = L.polyline([],{color:"#f07c01",weight:5,opacity:.9}).addTo(layer);
+      passedLine = L.polyline([],{color:"#f07c01",weight:6,opacity:1,lineCap:"butt",lineJoin:"miter"}).addTo(layer);
       t.stops.forEach((s,i)=>{
-        L.circleMarker([s.lat,s.lon],{radius:i===0||i===t.stops.length-1?6:4.5,color:s.cancelled?"#c0392b":"#005064",weight:2,fillColor:"#fff",fillOpacity:1})
+        L.marker([s.lat,s.lon],{icon:L.divIcon({className:"stopsq"+(i===0||i===t.stops.length-1?" end":"")+(s.cancelled?" cxl":""),iconSize:i===0||i===t.stops.length-1?[13,13]:[10,10]}),keyboard:false})
           .bindTooltip(`<b>${esc(s.name)}</b><br>an ${fmt(s.arr)} · ab ${fmt(s.dep)}${s.platform?"<br>Gleis "+esc(s.platform):""}<br><i>Klick: Anschlüsse</i>`)
           .on("click",()=>openOnward(t, i)).addTo(layer);
       });
     }
     const cls = "train-icon"+(isSel?"":(state.extra.includes(t)?" extra":" other"));
-    const icon = L.divIcon({className:cls,html:"🚆",iconSize:[34,34],iconAnchor:[17,17]});
+    const icon = L.divIcon({className:cls,html:"🚆",iconSize:[32,32],iconAnchor:[16,16]});
     const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:isSel?1000:0,keyboard:true,title:t.label}).addTo(layer)
-      .bindTooltip(esc(t.label),{permanent:isSel,direction:"top",offset:[0,-18],className:"trainlbl"})
+      .bindTooltip(esc(t.label),{permanent:isSel,direction:"top",offset:[0,-20],className:"trainlbl"})
       .on("click",()=>select(t.key));
     trainMarkers.set(t.key, mk);
   }
@@ -618,6 +652,10 @@ function renderCards(now){
       html += `<div class="small" style="margin-top:8px">Nächste Abfahrten:</div><ul class="list">` +
         state.nextDeps.map(t=>`<li><b>${esc(t.label)}</b> ab ${fmt(t.start)} → an ${fmt(t.end)}</li>`).join("") + `</ul>`;
     }
+  }
+  if (state.q && state.viaTransfer && state.viaTransfer.length){
+    html += `<div class="small" style="margin:0 0 10px">Nicht angezeigt, weil sie nicht direkt fahren: ` +
+      state.viaTransfer.map(t=>`<b>${esc(t.label)}</b> (nur bis ${esc(t.stops[t.stops.length-1].name)}, dort umsteigen)`).join(", ") + `.</div>`;
   }
   const sel = selTrip();
   for (const t of allTrips()){
@@ -753,7 +791,7 @@ async function run(text, {silent=false}={}){
     if (silent) await refreshExtra();
     const prevSel = state.sel;
     const keep = silent ? state.extra : [];
-    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, sel:null, fetchedAt:now, resolved:r.resolved};
+    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:now, resolved:r.resolved};
     state.sel = allTrips().some(t=>t.key===prevSel) ? prevSel : (r.running[0] && r.running[0].key);
     if (!silent || state.trips.length || state.extra.length)
       setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} unterwegs: ${r.resolved.from} → ${r.resolved.to}` : "");
