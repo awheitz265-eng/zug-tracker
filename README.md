@@ -5,6 +5,10 @@ Webseite, die zeigt, wo ein Zug gerade unterwegs ist. Man gibt einen Satz ein, z
 
 ## Funktionen
 
+- **Route planen:** Die Seite plant Verbindungen von A nach B, z. B. «Von hier nach Zürich HB» oder «Ich bin am Barfüsserplatz und möchte nach Riehen Dorf». Start und Ziel können Haltestellen, Adressen oder dein Standort («hier») sein. Angezeigt werden bis zu 5 Varianten mit Fusswegen, Umsteigezeiten, Gleis bzw. Kante, Echtzeit und Live-Fahrzeugen auf der Karte.
+- **Datum, Zeit, Ab/An:** Datum, Zeit und Ab/An lassen sich über die Felder einstellen oder im Satz angeben, z. B. «morgen Ankunft 9 Uhr», «am 5.11. um 14:30» oder «am Montag bis 18:00». Ohne Angabe gilt «jetzt».
+- **Automatische Erkennung:** Mit Zugtyp oder Zugnummer im Satz verfolgt die Seite einen Zug, sonst plant sie eine Route. Die Wahl lässt sich mit dem Schalter erzwingen.
+
 - **Suche per Satz:** Die Seite erkennt den Zugtyp (TGV/Lyria, ICE, IC, EC, IR, RE, TER …), «von … nach …» bzw. «zwischen … und …» und optional die Zugnummer. Das geschieht regelbasiert, ohne KI.
 - **Position auf der Karte:** Die Position wird aus Fahrplan und Echtzeit-Prognose geschätzt und entlang dem echten Gleisverlauf gezeichnet, sofern Transitous ihn liefert, sonst als Luftlinie. Die bereits gefahrene Strecke ist orange markiert.
 - **Echtzeit:** Die Seite zeigt Verspätungen, Gleisänderungen, Ausfälle, Störungsmeldungen und die Auslastungsprognose, soweit die Quellen sie liefern.

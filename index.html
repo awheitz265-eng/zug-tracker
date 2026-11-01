@@ -142,6 +142,43 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid va
 .dep .to span{font-size:12px;color:var(--muted)}
 .dep .pl{font-size:12.5px;text-align:right;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
 .dep.cxl .to b,.dep.cxl .tm{color:var(--bad);text-decoration:line-through}
+/* Suche: Modus, Datum/Zeit */
+.seg{display:flex;margin-top:8px;border:1px solid var(--line)}
+.seg button{flex:1 1 0;background:var(--steel);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 6px;border-right:1px solid var(--line);box-shadow:inset 0 1px 0 var(--hi)}
+.seg button:last-child{border-right:0}
+.seg button.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 4px rgba(0,0,0,.3)}
+.dt{display:grid;grid-template-columns:1fr 92px auto auto;gap:6px;margin-top:8px;align-items:end}
+.fld{display:flex;flex-direction:column;gap:2px;min-width:0}
+.fld span{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.fld input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:0;padding:6px 6px;background:var(--panel);color:var(--text);min-width:0;width:100%;box-shadow:inset 0 1px 2px var(--lo)}
+.dt .seg{margin-top:0}
+.dt .seg button{padding:7px 10px}
+.nowbtn{background:var(--steel);border:1px solid var(--line);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 8px;box-shadow:inset 0 1px 0 var(--hi)}
+/* Routen */
+.rt .name{font-variant-numeric:tabular-nums}
+.chain{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:8px}
+.chain .wk{font-size:11.5px;color:var(--muted);font-weight:700}
+.chain .ar{color:var(--muted);font-size:11px}
+.g-train{background:#027987!important}.g-s{background:#46bdcf!important;color:#06303a!important}.g-tram{background:#f07c01!important}.g-bus{background:#253c48!important}.g-other{background:#918277!important}
+.legs{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
+.legs li{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:13.5px}
+.legs .lt{font-variant-numeric:tabular-nums;font-weight:800;line-height:1.35}
+.legs .lt s{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
+.legs li.walk{color:var(--muted);font-size:13px}
+.legs li.walk .lt{font-weight:600}
+.legs .rd b{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.legs .rd div{margin-top:2px}
+.legs .live{margin-top:4px;font-size:12.5px;font-weight:700;color:var(--teal)}
+.legs .live.run{color:var(--orange)}
+.legs li.xfer{display:block;padding:4px 0 4px 54px;font-size:12px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line2)}
+.legs li.xfer.warn{color:var(--bad)}
+.legs .lnk{background:none;padding:0;color:var(--teal);font-size:12px;font-weight:800;text-decoration:underline;margin-top:3px}
+.pager{display:flex;gap:6px;margin:4px 0 10px}
+.pager button{flex:1;background:var(--steel);border:1px solid var(--line);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px;box-shadow:inset 0 1px 0 var(--hi)}
+.train-icon.lbl{font-size:10.5px;font-weight:800;letter-spacing:0;line-height:1;text-align:center;overflow:hidden}
+.train-icon.idle{opacity:.55}
+.youmk{background:#46bdcf;border:3px solid #fff;outline:2px solid #027987;box-shadow:0 0 0 6px rgba(70,189,207,.3)}
+.endmk{background:#253c48;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;outline:1px solid #253c48}
 @media (max-width:760px){
   .app{grid-template-columns:1fr;grid-template-rows:42vh 1fr}
   .mapwrap{order:-1}
@@ -158,16 +195,30 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid va
   <aside>
     <header>
       <h1><span class="dot"></span>Zug-Tracker</h1>
-      <p>Wo ist mein Zug gerade? Live-Schätzung aus Fahrplan und Echtzeitdaten.</p>
+      <p>Zug live verfolgen oder Route mit Bahn, Tram und Bus planen.</p>
     </header>
     <form id="f" autocomplete="off">
-      <textarea id="q" placeholder="z. B. Such mir den TGV, der im Moment von Paris Gare de Lyon nach Basel SBB unterwegs ist"></textarea>
-      <div class="row"><button class="primary" id="go" type="submit">Zug suchen</button></div>
+      <textarea id="q" placeholder="z. B. «Von hier nach Zürich HB» oder «TGV von Paris Gare de Lyon nach Basel SBB»"></textarea>
+      <div class="seg" id="mode" role="group" aria-label="Art der Suche">
+        <button type="button" data-m="auto" class="on">Automatisch</button>
+        <button type="button" data-m="track">Zug verfolgen</button>
+        <button type="button" data-m="route">Route planen</button>
+      </div>
+      <div class="dt">
+        <label class="fld"><span>Datum</span><input type="date" id="d"></label>
+        <label class="fld"><span>Zeit</span><input type="time" id="t"></label>
+        <div class="seg ab" id="ab" role="group" aria-label="Abfahrt oder Ankunft">
+          <button type="button" data-a="ab" class="on">Ab</button>
+          <button type="button" data-a="an">An</button>
+        </div>
+        <button type="button" class="nowbtn" id="now" title="Datum und Zeit leeren (= jetzt)">Jetzt</button>
+      </div>
+      <div class="row"><button class="primary" id="go" type="submit">Suchen</button></div>
       <div class="chips" id="chips"></div>
     </form>
     <div class="content">
       <div class="parsed" id="parsed"></div>
-      <div class="status" id="status">Gib ein, welchen Zug du suchst: Zugtyp, «von … nach …», optional die Zugnummer.</div>
+      <div class="status" id="status">Schreib, wohin du willst («von hier nach …») oder welchen Zug du suchst. Ohne Datum und Zeit gilt «jetzt».</div>
       <div id="results"></div>
       <div id="onward"></div>
     </div>
@@ -209,7 +260,10 @@ const TYPE_ALIASES = [
 ];
 // Füllwörter, die nicht zum Bahnhofsnamen gehören ("am", "in" bewusst nicht: Frankfurt am Main, Weil am Rhein)
 const STOP_WORDS = new Set(("unterwegs ist sind der die das den dem im jetzt gerade grad momentan aktuell heute " +
-  "fährt fahrt faehrt fahren fahrende läuft bitte zug zuges currently now today is running please train").split(/\s+/));
+  "fährt fahrt faehrt fahren fahrende läuft bitte zug zuges currently now today is running please train " +
+  "und ich bin möchte moechte will muss würde wuerde gerne gehen kommen reisen komme fahre").split(/\s+/));
+// "hier", "mein Standort" usw. = aktueller Standort des Geräts
+const HERE_RE = /^(hier|da|standort|mein standort|meinem standort|meinen standort|aktueller standort|aktuellem standort|aktuellen standort|meiner position|meine position|wo ich bin)$/i;
 
 function parseQuery(raw){
   const text = raw.replace(/[«»"“”„?!]/g," ").replace(/\s+/g," ").trim();
@@ -217,11 +271,13 @@ function parseQuery(raw){
   for (const [re,t] of TYPE_ALIASES){ if (re.test(text)){ out.type=t; break; } }
   const num = text.match(/\b(?:tgv|lyria|ice|ic|ec|ir|re|rj|rjx|nj|en|ter|icn|ouigo|zug|nr\.?|nummer)\s*(\d{2,6})\b/i) || text.match(/\b(\d{3,6})\b/);
   if (num) out.number = String(parseInt(num[1],10));
-  let m = text.match(/\bzwischen\s+(.+?)\s+und\s+(.+)$/i);
-  if (!m) m = text.match(/\b(?:von|ab|from|depuis)\s+(.+?)\s+(?:nach|bis|to|à|vers|richtung)\s+(.+)$/i);
+  let m = text.match(/\bich bin\s+(?:gerade\s+|jetzt\s+)?(?:in der|in den|in|im|am|an der|an|beim|bei der|bei|auf dem|auf der)?\s*(.+?)\s+und\s+(?:möchte|moechte|will|muss|würde|wuerde)\s+(?:gerne\s+)?(?:nach|zum|zur|zu|ins|in die|in den)\s+(.+)$/i);
+  if (!m) m = text.match(/\bzwischen\s+(.+?)\s+und\s+(.+)$/i);
+  if (!m) m = text.match(/\b(?:von|ab|from|depuis)\s+(.+?)\s+(?:nach|bis|to|à|vers|richtung|zum|zur)\s+(.+)$/i);
   if (!m) m = text.match(/^(.+?)\s*(?:→|->|–|—| - )\s*(.+)$/);
   if (!m) m = text.match(/^(.+?)\s+(?:nach|to)\s+(.+)$/i);
   if (m){ out.from = cleanStation(m[1], true); out.to = cleanStation(m[2], false); }
+  else if ((m = text.match(/(?:^|\s)(?:nach|zum|zur|to)\s+(.+)$/i))){ out.to = cleanStation(m[1], false); }  // nur Ziel: Start = hier
   return out;
 }
 function cleanStation(s, isFrom){
@@ -296,11 +352,14 @@ function pointAlong(trip, i, f){ // Punkt zwischen Halt i und i+1, Anteil f (0..
 
 /* ================= Datenmodell ================= */
 function odLabel(j){
-  const cat = j.category||"Zug";
-  if (/^(S|SN|T|TRAM|B|BUS|NFB|NFT|BAT|FUN|M|R)$/i.test(cat) && j.number && j.number.length <= 4)
-    return /^S|SN$/i.test(cat) ? cat+j.number : cat+" "+j.number;
+  const cat = j.category||"Zug", num = String(j.number||"");
+  const nice = {T:"Tram", TRAM:"Tram", B:"Bus", BUS:"Bus", NFB:"Bus", NFT:"Tram", BAT:"Schiff", FUN:"Standseilbahn"}[cat.toUpperCase()];
+  if (/^\d{1,3}$/.test(num) || (nice && num && num.length <= 4)){        // Liniennummer (IC 3, S3, Tram 8, Bus 30)
+    if (/^(S|SN)$/i.test(cat)) return cat+num;
+    return (nice||cat)+" "+num.replace(/^0+(?=\d)/,"");
+  }
   const n = parseInt(j.name,10);
-  return cat+" "+(isNaN(n) ? (j.number||"") : n);
+  return cat+" "+(isNaN(n) ? num : n);
 }
 // transport.opendata.ch: Section/Journey → Fahrt
 function buildTrip(j, firstFallback){
@@ -457,6 +516,8 @@ async function findTxTripId(od){
     const names = [st.tripShortName, st.displayName, st.routeShortName].filter(Boolean).join(" ");
     const digits = (names.match(/\d+/g)||[]).map(x=>parseInt(x,10));
     if (!isNaN(want) && digits.includes(want)) score += 5;
+    const line = parseInt(od.number,10);   // Tram/Bus/S-Bahn: Liniennummer statt Fahrtnummer
+    if (!isNaN(line) && String(line)===String(od.number).replace(/^0+/,"") && digits.includes(line)) score += 3;
     if (od.category && names.toUpperCase().includes(od.category.toUpperCase())) score += 1;
     const dest = ((st.tripTo&&st.tripTo.name)||st.headsign||"").toLowerCase();
     if (od.dest && dest && (dest.includes(od.dest.toLowerCase().split(" ")[0]) || od.dest.toLowerCase().includes(dest.split(" ")[0]))) score += 2;
@@ -569,6 +630,232 @@ async function loadOnward(stop, at){
   }).filter(d=>d.sched)};
 }
 
+/* ================= Datum, Zeit, Ab/An aus dem Text ================= */
+const WD = ["sonntag","montag","dienstag","mittwoch","donnerstag","freitag","samstag"];
+const isoDate = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
+function parseWhen(raw){
+  let text = " "+raw.replace(/[«»"“”„?!]/g," ")+" ";
+  const out = {date:null, time:null, isArr:null};
+  const today = zurichParts(new Date()).date;
+  const addDays = n => { const d = new Date(today+"T12:00:00"); d.setDate(d.getDate()+n); return isoDate(d); };
+  const cut = m => { text = text.replace(m[0]," "); };
+  let m;
+  if ((m = text.match(/\b(übermorgen|uebermorgen)\b/i))) { out.date = addDays(2); cut(m); }
+  else if ((m = text.match(/\bmorgen\b/i))) { out.date = addDays(1); cut(m); }
+  else if ((m = text.match(/\bheute\b/i))) { out.date = today; cut(m); }
+  if ((m = text.match(/\b(?:am\s+)?(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/i))) {
+    const target = WD.indexOf(m[1].toLowerCase()), d0 = new Date(today+"T12:00:00");
+    out.date = addDays((target - d0.getDay() + 7) % 7); cut(m);
+  }
+  if ((m = text.match(/\b(?:am\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})?(?!\d)/))) {
+    const y0 = +today.slice(0,4); let y = m[3] ? (m[3].length===2 ? 2000 + +m[3] : +m[3]) : y0;
+    let ds = y+"-"+pad(m[2])+"-"+pad(m[1]);
+    if (!m[3] && ds < today) ds = (y+1)+"-"+pad(m[2])+"-"+pad(m[1]);
+    if (+m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31){ out.date = ds; cut(m); }
+  }
+  if (/\b(ankunft|ankommen|spätestens|spaetestens|da sein|dort sein)\b/i.test(text) || /\b(an|bis)\s+\d{1,2}(?:[:.h]\d{2})?\s*(?:uhr)?\b/i.test(text)) out.isArr = true;
+  else if (/\b(abfahrt|abfahren|losfahren)\b/i.test(text) || /\bab\s+\d/i.test(text)) out.isArr = false;
+  const T = [
+    /\b(?:um|ab|an|bis|gegen)\s+(\d{1,2})(?:[:.h](\d{2}))?\s*(?:uhr)?(?=\s|$)/i,
+    /\b(\d{1,2})[:.](\d{2})\s*(?:uhr)?(?=\s|$)/i,
+    /\b(\d{1,2})\s*uhr\b/i,
+  ];
+  for (const re of T){
+    if ((m = text.match(re))) { const h = +m[1], mi = +(m[2]||0); if (h < 24 && mi < 60){ out.time = pad(h)+":"+pad(mi); cut(m); break; } }
+  }
+  text = text.replace(/\b(ankunft|abfahrt|ankommen|abfahren|losfahren|spätestens|spaetestens|da sein|dort sein)\b/ig," ");
+  out.rest = text.replace(/\s+/g," ").replace(/\s+([,.])/g,"$1").trim();
+  return out;
+}
+// Zürcher Ortszeit (Datum + Zeit) → Date
+function zurichToDate(date, time){
+  const guess = new Date(date+"T"+time+":00Z");
+  const p = zurichParts(guess); const shown = new Date(p.date+"T"+p.time+":00Z");
+  return new Date(guess.getTime() - (shown - guess));
+}
+function whenTxt(w){
+  const today = zurichParts(new Date()).date;
+  const d = w.date === today ? "heute" : w.date.split("-").reverse().join(".");
+  return (w.isArr ? "Ankunft " : "Abfahrt ") + d + " " + w.time;
+}
+
+/* ================= Routenplanung A → B ================= */
+const GROUP_COLOR = {train:"#027987", s:"#46bdcf", tram:"#f07c01", bus:"#253c48", other:"#918277"};
+let route = {active:false, list:[], sel:0};
+function getHere(){
+  return new Promise((res, rej) => {
+    if (!navigator.geolocation) return rej(new Error("Dein Browser gibt keinen Standort heraus. Gib eine Adresse oder Haltestelle ein."));
+    navigator.geolocation.getCurrentPosition(
+      p => res({lat:p.coords.latitude, lon:p.coords.longitude, acc:p.coords.accuracy}),
+      e => rej(new Error(e.code===1 ? "Standort nicht freigegeben. Erlaube den Standort im Browser oder gib eine Adresse ein." : "Standort konnte nicht ermittelt werden. Gib eine Adresse oder Haltestelle ein.")),
+      {enableHighAccuracy:true, timeout:12000, maximumAge:60000});
+  });
+}
+function buildRoute(c){
+  const P = o => { const l = o && (o.location || o.station); const co = l && l.coordinate; return {name:l && l.name, id:l && l.id, lat:co && co.x, lon:co && co.y}; };
+  const exp = (o, key) => {
+    const sched = toDate(o && o[key]);
+    const pr = toDate(o && o.prognosis && o.prognosis[key]);
+    return {sched, exp: pr || (typeof (o&&o.delay) === "number" && sched ? new Date(sched.getTime()+o.delay*60000) : sched)};
+  };
+  const legs = (c.sections||[]).map(s => {
+    const d = exp(s.departure, "departure"), a = exp(s.arrival, "arrival");
+    if (s.walk || !s.journey){
+      const min = Math.round(((s.walk && s.walk.duration) || ((a.sched - d.sched)/1000) || 0) / 60);
+      return {kind:"walk", from:P(s.departure), to:P(s.arrival), dep:d.exp, arr:a.exp, min};
+    }
+    const dp = s.departure, ap = s.arrival;
+    const dpp = dp.prognosis && dp.prognosis.platform, app = ap.prognosis && ap.prognosis.platform;
+    return {kind:"ride", from:P(dp), to:P(ap), dep:d.exp, arr:a.exp, depSched:d.sched, arrSched:a.sched,
+      depDelay:dp.delay, arrDelay:ap.delay,
+      depPlat: dpp || dp.platform, depPlatChg: !!(dpp && dp.platform && dpp !== dp.platform), depPlatSched: dp.platform,
+      arrPlat: app || ap.platform, arrPlatChg: !!(app && ap.platform && app !== ap.platform), arrPlatSched: ap.platform,
+      line: odLabel(s.journey), group: groupOfOd(s.journey), dest: s.journey.to || "", operator: s.journey.operator || "",
+      trip: buildTrip(s.journey)};
+  }).filter(l => l.dep && l.arr && !(l.kind==="walk" && l.min <= 0));
+  if (!legs.length) return null;
+  const rides = legs.filter(l => l.kind==="ride");
+  const dep = legs[0].dep, arr = legs[legs.length-1].arr;
+  return {
+    key: dep.toISOString()+"|"+rides.map(r=>r.line).join(","), legs, dep, arr,
+    durMin: Math.round((arr-dep)/60000), transfers: Math.max(0, rides.length-1),
+    walkMin: legs.filter(l=>l.kind==="walk").reduce((s,l)=>s+l.min, 0),
+    maxDelay: Math.max(0, ...rides.map(r => Math.max(r.depDelay||0, r.arrDelay||0))),
+    rt: rides.some(r => typeof r.depDelay === "number")
+  };
+}
+async function routeQuery(f, t, w){
+  const res = await api("/connections", {from:f, to:t, date:w.date, time:w.time, isArrivalTime:w.isArr?1:null, limit:5});
+  const list = (res.connections||[]).map(buildRoute).filter(Boolean);
+  if (!list.length) throw new Error("Keine Verbindung gefunden. Prüfe Start und Ziel (Haltestelle, Adresse oder «hier»).");
+  return {list, fromName: res.from && res.from.name, toName: res.to && res.to.name};
+}
+async function enrichRoute(r){
+  if (!r || r.enriched) return;
+  r.enriched = true;
+  await Promise.all(r.legs.filter(l => l.kind==="ride").map(l => enrich(l.trip)));
+  if (route.active && route.list[route.sel] === r){ drawRouteMap(false); tickRoute(); }
+}
+async function pageRoute(dir){
+  const L0 = route.list[0], L1 = route.list[route.list.length-1];
+  const base = dir > 0 ? new Date(L1.dep.getTime()+60000) : new Date(L0.arr.getTime()-60000);
+  const p = zurichParts(base);
+  const w = {date:p.date, time:p.time, isArr: dir < 0};
+  setStatus(dir > 0 ? "Lade spätere Verbindungen …" : "Lade frühere Verbindungen …");
+  try{
+    const r = await routeQuery(route.f, route.t, w);
+    route.list = r.list.sort((a,b)=>a.dep-b.dep); route.sel = 0; route.qWhen = w;
+    setStatus(""); drawRouteMap(true); tickRoute(); enrichRoute(route.list[0]);
+  }catch(e){ setStatus(e.message, true); }
+}
+function selectRoute(i){ route.sel = i; drawRouteMap(true); tickRoute(); enrichRoute(route.list[i]); }
+
+function drawRouteMap(fit){
+  layer.clearLayers(); trainMarkers.clear(); passedLine = null;
+  const r = route.list[route.sel]; if (!r) return;
+  const pts = [];
+  for (const l of r.legs){
+    if (l.kind === "walk"){
+      const p = [[l.from.lat,l.from.lon],[l.to.lat,l.to.lon]];
+      if (p.every(x => x[0]!=null)){ L.polyline(p,{color:"#4f6670",weight:3,dashArray:"2 7",lineCap:"round"}).addTo(layer); pts.push(...p); }
+      continue;
+    }
+    const t = l.trip, g = t.geom || t.stops.map(s=>[s.lat,s.lon]);
+    L.polyline(g,{color:GROUP_COLOR[l.group]||"#027987",weight:6,opacity:.95,lineCap:"butt",lineJoin:"miter"}).addTo(layer);
+    pts.push(...g);
+    t.stops.forEach((s,i) => {
+      const end = i===0 || i===t.stops.length-1;
+      L.marker([s.lat,s.lon],{icon:L.divIcon({className:"stopsq"+(end?" end":""),iconSize:end?[12,12]:[8,8]}),keyboard:false})
+        .bindTooltip(`<b>${esc(s.name)}</b><br>${s.arr?"an "+fmt(s.arr):""}${s.arr&&s.dep?" · ":""}${s.dep?"ab "+fmt(s.dep):""}`).addTo(layer);
+    });
+    const icon = L.divIcon({className:"train-icon lbl g-"+l.group, html:esc(l.line.replace(/\s+/g,"").slice(0,5)), iconSize:[32,32], iconAnchor:[16,16]});
+    const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:1000,title:l.line}).addTo(layer)
+      .bindTooltip(esc(l.line+" → "+l.dest),{direction:"top",offset:[0,-20],className:"trainlbl"});
+    trainMarkers.set(t.key, mk);
+  }
+  const first = r.legs[0].from, last = r.legs[r.legs.length-1].to;
+  if (first.lat!=null) L.marker([first.lat,first.lon],{icon:L.divIcon({className:"endmk",html:"A",iconSize:[20,20]})}).bindTooltip("Start: "+esc(first.name||"")).addTo(layer);
+  if (last.lat!=null) L.marker([last.lat,last.lon],{icon:L.divIcon({className:"endmk",html:"B",iconSize:[20,20]})}).bindTooltip("Ziel: "+esc(last.name||"")).addTo(layer);
+  if (route.here) L.marker([route.here.lat,route.here.lon],{icon:L.divIcon({className:"youmk",iconSize:[14,14]}),zIndexOffset:500}).bindTooltip("Dein Standort").addTo(layer);
+  if (fit && pts.length) map.fitBounds(L.latLngBounds(pts).pad(0.12));
+}
+function tickRoute(){
+  const now = new Date(); const r = route.list[route.sel];
+  let pendingShown = false;   // von wartenden Fahrzeugen nur das nächste zeigen
+  if (r) for (const l of r.legs){
+    if (l.kind !== "ride") continue;
+    const p = positionAt(l.trip, now), mk = trainMarkers.get(l.trip.key);
+    if (p && mk){
+      mk.setLatLng([p.lat,p.lon]);
+      const running = p.state==="moving" || p.state==="station";
+      const show = running || (p.state==="before" && !pendingShown);
+      if (p.state==="before") pendingShown = true;
+      const el = mk.getElement();
+      if (el){ el.classList.toggle("idle", !running); el.style.display = show ? "" : "none"; }
+    }
+  }
+  renderRoutes(now);
+}
+function legLive(l, now){
+  const p = positionAt(l.trip, now); if (!p) return "";
+  const S = l.trip.stops;
+  if (p.state === "before"){ const m = (l.dep - now)/60000; return m > 90 ? "" : `<div class="live">Abfahrt in ${minutesTxt(Math.max(0,m))}</div>`; }
+  if (p.state === "arrived") return `<div class="live">angekommen</div>`;
+  if (p.state === "station") return `<div class="live run">Live: hält in ${esc(S[p.idx].name)}</div>`;
+  return `<div class="live run">Live: zwischen ${esc(S[p.idx].name)} und ${esc(S[p.next].name)}</div>`;
+}
+function plat(p, chg, sched, word){
+  if (!p) return "";
+  return chg ? ` · <span class="platchg">${word} ${esc(p)}</span> <s class="small">statt ${esc(sched)}</s>` : ` · ${word} ${esc(p)}`;
+}
+function renderRoutes(now){
+  const box = $("results"); if (!route.active) return;
+  const word = l => /^(T|TRAM|B|BUS|NFB|NFT)$/i.test(l.trip.category) ? "Kante" : "Gleis";
+  let h = `<div class="pager"><button type="button" data-pg="-1">‹ Früher</button><button type="button" data-pg="1">Später ›</button></div>`;
+  route.list.forEach((r, i) => {
+    const sel = i === route.sel;
+    const badge = !r.rt ? `<span class="badge na">Fahrplan</span>` : (r.maxDelay > 0 ? `<span class="badge late">bis +${r.maxDelay} Min.</span>` : `<span class="badge ok">pünktlich</span>`);
+    const chain = r.legs.map(l => l.kind==="walk" ? `<span class="wk">Fuss ${l.min}′</span>` : `<span class="line g-${l.group}">${esc(l.line)}</span>`).join(`<span class="ar">›</span>`);
+    h += `<div class="card rt ${sel?"sel":""}" data-i="${i}" tabindex="0">
+      <div class="t"><span class="name">${fmt(r.dep)} → ${fmt(r.arr)}</span>${badge}</div>
+      <div class="sub">${minutesTxt(r.durMin)} · ${r.transfers===0?"direkt":r.transfers+" Umstieg"+(r.transfers>1?"e":"")}${r.walkMin?" · "+r.walkMin+" Min. zu Fuss":""}</div>
+      <div class="chain">${chain}</div>`;
+    if (sel){
+      h += `<ul class="legs">`;
+      let prevRide = null, walkBetween = 0;
+      r.legs.forEach((l, k) => {
+        if (l.kind === "walk"){
+          walkBetween += l.min;
+          h += `<li class="walk"><span class="lt">${fmt(l.dep)}</span><span>Fussweg ${l.min} Min.${l.to.name?" bis "+esc(l.to.name):""}</span></li>`;
+          return;
+        }
+        if (prevRide){
+          const avail = Math.round((l.dep - prevRide.arr)/60000), spare = avail - walkBetween;
+          const cls = spare < 2 ? "xfer warn" : "xfer";
+          h += `<li class="${cls}">Umsteigen: ${avail} Min.${walkBetween?` (davon ${walkBetween} Min. Fussweg)`:""}${spare<0?" – Anschluss gefährdet":(spare<2?" – knapp":"")}</li>`;
+        }
+        const late = (a,b) => a && b && (a-b) >= 60000;
+        h += `<li class="ride"><span class="lt">${fmt(l.dep)}${late(l.dep,l.depSched)?`<s>${fmt(l.depSched)}</s>`:""}<br>${fmt(l.arr)}${late(l.arr,l.arrSched)?`<s>${fmt(l.arrSched)}</s>`:""}</span>
+          <span class="rd"><b><span class="line g-${l.group}">${esc(l.line)}</span> Richtung ${esc(l.dest)}</b>
+            <div>ab ${esc(l.from.name)}${plat(l.depPlat,l.depPlatChg,l.depPlatSched,word(l))}</div>
+            <div>an ${esc(l.to.name)}${plat(l.arrPlat,l.arrPlatChg,l.arrPlatSched,word(l))}</div>
+            ${legLive(l, now)}
+            ${(l.trip.alerts||[]).map(a=>`<div class="alert"><b>${esc(a.headerText||"Meldung")}</b>${a.descriptionText?esc(a.descriptionText).slice(0,300):""}</div>`).join("")}
+            <button type="button" class="lnk" data-onw="${k}">Anschlüsse ab ${esc(l.to.name)}</button>
+          </span></li>`;
+        prevRide = l; walkBetween = 0;
+      });
+      h += `</ul>`;
+    }
+    h += `</div>`;
+  });
+  const fa = route.fetchedAt ? `Daten von ${fmt(route.fetchedAt)}, automatische Aktualisierung jede Minute.` : "";
+  box.innerHTML = h + `<div class="small">${fa}</div>`;
+  box.querySelectorAll(".card.rt").forEach(el => { el.onclick = () => { if (+el.dataset.i !== route.sel) selectRoute(+el.dataset.i); }; el.onkeydown = e => { if (e.key==="Enter") selectRoute(+el.dataset.i); }; });
+  box.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => pageRoute(+b.dataset.pg));
+  box.querySelectorAll("[data-onw]").forEach(b => b.onclick = e => { e.stopPropagation(); const l = route.list[route.sel].legs[+b.dataset.onw]; openOnward(l.trip, l.trip.stops.length-1); });
+}
+
 /* ================= Karte ================= */
 const map = L.map("map",{zoomControl:true}).setView([46.8,8.2],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,
@@ -612,7 +899,8 @@ function drawRoutes(fit){
 }
 
 function tick(){
-  const now = new Date(); const sel = selTrip();
+  if (route.active) return tickRoute();
+  const now = refNow(); const sel = selTrip();
   for (const t of allTrips()){
     const p = positionAt(t, now); const mk = trainMarkers.get(t.key);
     if (p && mk) mk.setLatLng([p.lat,p.lon]);
@@ -759,6 +1047,7 @@ async function follow(d){
     if (!t && d.od) t = buildTrip(d.od, d.od.stop);
     if (!t || t.stops.length < 2) throw new Error("Für diese Fahrt gibt es keine Streckendaten.");
     t.extraInfo = d;
+    if (route.active){ route.active = false; stopTimers(); tickTimer = setInterval(tick, TICK_MS); refreshTimer = setInterval(async()=>{ await refreshExtra(); drawRoutes(false); tick(); }, REFRESH_MS); }
     state.extra = state.extra.filter(x=>x.key!==t.key).concat([t]);
     state.sel = t.key;
     setStatus(d.line+" → "+d.to+" wird verfolgt.");
@@ -774,11 +1063,70 @@ async function refreshExtra(){
 }
 
 /* ---------- Suche ---------- */
+let modePref = "auto", abArr = false;
+const refNow = () => state.atTime || new Date();
+function setAb(isArr){ abArr = !!isArr; $("ab").querySelectorAll("button").forEach(b=>b.classList.toggle("on", (b.dataset.a==="an")===abArr)); }
+function setMode(m){ modePref = m; $("mode").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.m===m)); }
+function stopTimers(){ clearInterval(refreshTimer); clearInterval(tickTimer); }
+
 async function run(text, {silent=false}={}){
   lastText = text;
-  const q = parseQuery(text);
+  const w = parseWhen(text);
+  if (!silent){ if (w.date) $("d").value = w.date; if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
+  const when = {date:$("d").value || null, time:$("t").value || null, isArr:abArr};
+  const q = parseQuery(w.rest);
+  const mode = modePref !== "auto" ? modePref : ((q.type || q.number) ? "track" : "route");
+  if (mode === "route") return runRoute(q, when, text, silent);
+  return runTrack(q, when, text, silent);
+}
+
+async function runRoute(q, when, text, silent){
+  let from = q.from || "hier", to = q.to;
+  if (!to){
+    setStatus("Ich habe das Ziel nicht erkannt. Schreib z. B. «von hier nach Zürich HB» oder «Basel SBB nach Bern morgen um 8».", true);
+    return;
+  }
+  const fromHere = HERE_RE.test(from), toHere = HERE_RE.test(to);
+  $("parsed").innerHTML = `Route planen · von <b>${esc(fromHere?"deinem Standort":from)}</b> nach <b>${esc(toHere?"deinem Standort":to)}</b>`;
+  if (!silent){ setStatus(fromHere||toHere ? "Ermittle deinen Standort …" : "Suche Verbindungen …"); $("go").disabled = true; onward = null; renderOnward(); }
+  try{
+    let here = route.here || null;
+    if ((fromHere || toHere) && (!silent || !here)) here = await getHere();
+    const co = h => h.lat.toFixed(5)+","+h.lon.toFixed(5);
+    const f = fromHere ? co(here) : from, t = toHere ? co(here) : to;
+    const nowP = zurichParts(new Date());
+    const qWhen = silent && route.active && route.qWhen ? route.qWhen : {date: when.date || nowP.date, time: when.time || nowP.time, isArr: !!when.isArr};
+    if (!silent) setStatus("Suche Verbindungen …");
+    const r = await routeQuery(f, t, qWhen);
+    const prevKey = silent && route.active && route.list[route.sel] ? route.list[route.sel].key : null;
+    const list = r.list.sort((a,b)=>a.dep-b.dep);
+    let sel = prevKey ? list.findIndex(x=>x.key===prevKey) : -1;
+    if (sel < 0) sel = qWhen.isArr ? list.length-1 : 0;
+    route = {active:true, list, sel, f, t, here:(fromHere||toHere)?here:null, qWhen, fetchedAt:new Date(),
+             fromName: fromHere ? "deinem Standort"+(r.fromName?" ("+r.fromName+")":"") : (r.fromName||from),
+             toName: toHere ? "deinem Standort" : (r.toName||to)};
+    state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null, atTime:null};
+    $("parsed").innerHTML = `Route planen · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(qWhen))}`;
+    setStatus(`${list.length} Verbindungen gefunden. Antippen für Details.`);
+    drawRouteMap(!silent); tickRoute(); enrichRoute(list[sel]);
+    document.body.classList.add("has-results");
+    if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
+    saveUrl(text, when);
+  }catch(e){
+    if (!silent){ setStatus(e.message || "Unbekannter Fehler.", true); route.active = false; $("results").innerHTML = ""; layer.clearLayers(); }
+  }finally{ $("go").disabled = false; }
+  stopTimers();
+  if (route.active){
+    refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
+    tickTimer = setInterval(tick, TICK_MS);
+  }
+}
+
+async function runTrack(q, when, text, silent){
+  const atTime = (when.date || when.time) ? zurichToDate(when.date || zurichParts(new Date()).date, when.time || zurichParts(new Date()).time) : null;
+  const live = !atTime || Math.abs(atTime - Date.now()) < 5*60000;
   $("parsed").innerHTML = q.from && q.to
-    ? `Erkannt: <b>${esc(q.type||"jeder Zug")}</b>${q.number?" Nr. <b>"+esc(q.number)+"</b>":""} · von <b>${esc(q.from)}</b> nach <b>${esc(q.to)}</b>`
+    ? `Zug verfolgen · <b>${esc(q.type||"jeder Zug")}</b>${q.number?" Nr. <b>"+esc(q.number)+"</b>":""} · von <b>${esc(q.from)}</b> nach <b>${esc(q.to)}</b>${live?"":" · Fahrplan-Ansicht für <b>"+esc(fmtDay(atTime))+"</b>"}`
     : "";
   if (!q.from || !q.to){
     setStatus("Ich habe Start und Ziel nicht erkannt. Schreib z. B. «TGV von Paris Gare de Lyon nach Basel SBB».", true);
@@ -786,45 +1134,62 @@ async function run(text, {silent=false}={}){
   }
   if (!silent){ setStatus("Suche läuft …"); $("go").disabled = true; onward = null; renderOnward(); }
   try{
-    const now = new Date();
-    const r = await findRunning(q, now);
+    const ref = live ? new Date() : atTime;
+    const r = await findRunning(q, ref);
     if (silent) await refreshExtra();
     const prevSel = state.sel;
     const keep = silent ? state.extra : [];
-    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:now, resolved:r.resolved};
+    route.active = false;
+    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:new Date(), resolved:r.resolved, atTime: live ? null : atTime};
     state.sel = allTrips().some(t=>t.key===prevSel) ? prevSel : (r.running[0] && r.running[0].key);
     if (!silent || state.trips.length || state.extra.length)
-      setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} unterwegs: ${r.resolved.from} → ${r.resolved.to}` : "");
+      setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} ${live?"unterwegs":"zu dieser Zeit unterwegs"}: ${r.resolved.from} → ${r.resolved.to}` : "");
     drawRoutes(!silent); tick();
     document.body.classList.add("has-results");
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
     if (silent && onward && onward.data){ const o = onward; const tr = allTrips().find(t=>t.stops.includes(o.stop)); if (tr) openOnward(tr, tr.stops.indexOf(o.stop), true); }
-    try{ history.replaceState(null,"","?q="+encodeURIComponent(text)); }catch(e){}
+    saveUrl(text, when);
   }catch(e){
     if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
   }finally{ $("go").disabled = false; }
-  clearInterval(refreshTimer); clearInterval(tickTimer);
+  stopTimers();
   if (state.q){
-    refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
+    if (!state.atTime) refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
     tickTimer = setInterval(tick, TICK_MS);
   }
+}
+function fmtDay(d){ return d.toLocaleString("de-CH",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:TZ}); }
+function saveUrl(text, when){
+  const u = new URLSearchParams(); u.set("q", text);
+  if (when.date) u.set("d", when.date); if (when.time) u.set("t", when.time); if (when.isArr) u.set("a","1");
+  if (modePref !== "auto") u.set("m", modePref);
+  try{ history.replaceState(null,"","?"+u.toString()); }catch(e){}
 }
 
 /* ---------- Start ---------- */
 const EXAMPLES = [
+  "Von hier nach Zürich HB",
+  "Basel SBB nach Bern morgen Ankunft 9 Uhr",
+  "Zürich, Bahnhofstrasse 1 nach Luzern",
   "TGV von Paris Gare de Lyon nach Basel SBB",
-  "ICE von Basel SBB nach Frankfurt (Main) Hbf",
   "IC von Zürich HB nach Bern",
-  "EC von Zürich HB nach Milano Centrale",
 ];
 $("chips").innerHTML = EXAMPLES.map(e=>`<button type="button" class="chip">${esc(e)}</button>`).join("");
 $("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ $("q").value=b.textContent; run(b.textContent); });
 $("f").addEventListener("submit", ev=>{ ev.preventDefault(); run($("q").value); });
 $("q").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); run($("q").value); }});
-const initial = new URLSearchParams(location.search).get("q");
+$("mode").querySelectorAll("button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));
+$("ab").querySelectorAll("button").forEach(b=>b.onclick=()=>setAb(b.dataset.a==="an"));
+$("now").onclick = ()=>{ $("d").value = ""; $("t").value = ""; setAb(false); };
+const P0 = new URLSearchParams(location.search);
+if (P0.get("d")) $("d").value = P0.get("d");
+if (P0.get("t")) $("t").value = P0.get("t");
+if (P0.get("a")==="1") setAb(true);
+if (P0.get("m")==="track" || P0.get("m")==="route") setMode(P0.get("m"));
+const initial = P0.get("q");
 if (initial){ $("q").value = initial; run(initial); }
 
-window.__zt = {parseQuery, positionAt, buildTrip, decodePolyline, txTrip, mergeTx, attachGeometry};
+window.__zt = {parseQuery, parseWhen, zurichToDate, buildRoute, positionAt, buildTrip, decodePolyline, txTrip, mergeTx, attachGeometry};
 </script>
 </body>
 </html>
