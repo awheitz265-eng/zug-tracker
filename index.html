@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Zug-Tracker</title>
-<meta name="description" content="Live-Position von Zügen auf der Karte, geschätzt aus Fahrplan und Echtzeitdaten, mit Anschlüssen.">
+<meta name="description" content="Routen mit Bahn, Tram und Bus planen und Züge live auf der Karte verfolgen.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:opsz,wght@6..12,400;6..12,600;6..12,700;6..12,800&display=swap" rel="stylesheet">
@@ -144,16 +144,20 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid va
 .dep.cxl .to b,.dep.cxl .tm{color:var(--bad);text-decoration:line-through}
 /* Suche: Modus, Datum/Zeit */
 .seg{display:flex;margin-top:8px;border:1px solid var(--line)}
-.seg button{flex:1 1 0;background:var(--steel);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 6px;border-right:1px solid var(--line);box-shadow:inset 0 1px 0 var(--hi)}
+.seg button{flex:1 1 0;white-space:nowrap;background:var(--steel);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 6px;border-right:1px solid var(--line);box-shadow:inset 0 1px 0 var(--hi)}
 .seg button:last-child{border-right:0}
 .seg button.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 4px rgba(0,0,0,.3)}
-.dt{display:grid;grid-template-columns:1fr 92px auto auto;gap:6px;margin-top:8px;align-items:end}
+.dt{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;margin-top:8px;align-items:end}
 .fld{display:flex;flex-direction:column;gap:2px;min-width:0}
 .fld span{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.fld input{font:inherit;font-size:14px;border:1px solid var(--line);border-radius:0;padding:6px 6px;background:var(--panel);color:var(--text);min-width:0;width:100%;box-shadow:inset 0 1px 2px var(--lo)}
-.dt .seg{margin-top:0}
-.dt .seg button{padding:7px 10px}
-.nowbtn{background:var(--steel);border:1px solid var(--line);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px 8px;box-shadow:inset 0 1px 0 var(--hi)}
+.fld input{font:inherit;font-size:16px;border:1px solid var(--line);border-radius:0;padding:6px 8px;height:38px;background:var(--panel);color:var(--text);min-width:0;max-width:100%;width:100%;display:block;-webkit-appearance:none;appearance:none;box-shadow:inset 0 1px 2px var(--lo)}
+.fld input::-webkit-date-and-time-value{text-align:left}
+.dt .seg{margin-top:0;height:38px}
+.dt .seg button{padding:0 10px}
+.nowbtn{height:38px;background:var(--steel);border:1px solid var(--line);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:0 8px;box-shadow:inset 0 1px 0 var(--hi)}
+.dt.off .fld,.dt.off .seg,.dt.off .nowbtn{opacity:.4}
+.dt input:disabled,.dt button:disabled{cursor:not-allowed}
+.dthint{grid-column:1/-1;font-size:11.5px;color:var(--muted);line-height:1.35}
 /* Routen */
 .rt .name{font-variant-numeric:tabular-nums}
 .chain{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:8px}
@@ -195,16 +199,15 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid va
   <aside>
     <header>
       <h1><span class="dot"></span>Zug-Tracker</h1>
-      <p>Zug live verfolgen oder Route mit Bahn, Tram und Bus planen.</p>
+      <p>Route mit Bahn, Tram und Bus planen oder Zug live verfolgen.</p>
     </header>
     <form id="f" autocomplete="off">
-      <textarea id="q" placeholder="z. B. «Von hier nach Zürich HB» oder «TGV von Paris Gare de Lyon nach Basel SBB»"></textarea>
-      <div class="seg" id="mode" role="group" aria-label="Art der Suche">
-        <button type="button" data-m="auto" class="on">Automatisch</button>
-        <button type="button" data-m="track">Zug verfolgen</button>
-        <button type="button" data-m="route">Route planen</button>
+      <textarea id="q" aria-label="Suche"></textarea>
+      <div class="seg" id="mode" role="group" aria-label="Modus">
+        <button type="button" data-m="route" class="on">Route</button>
+        <button type="button" data-m="track">Zug live</button>
       </div>
-      <div class="dt">
+      <div class="dt" id="dt">
         <label class="fld"><span>Datum</span><input type="date" id="d"></label>
         <label class="fld"><span>Zeit</span><input type="time" id="t"></label>
         <div class="seg ab" id="ab" role="group" aria-label="Abfahrt oder Ankunft">
@@ -212,13 +215,14 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid va
           <button type="button" data-a="an">An</button>
         </div>
         <button type="button" class="nowbtn" id="now" title="Datum und Zeit leeren (= jetzt)">Jetzt</button>
+        <div class="dthint" id="dthint" hidden>Datum und Zeit gelten nur für «Route». «Zug live» zeigt immer die aktuelle Lage.</div>
       </div>
-      <div class="row"><button class="primary" id="go" type="submit">Suchen</button></div>
+      <div class="row"><button class="primary" id="go" type="submit">Route suchen</button></div>
       <div class="chips" id="chips"></div>
     </form>
     <div class="content">
       <div class="parsed" id="parsed"></div>
-      <div class="status" id="status">Schreib, wohin du willst («von hier nach …») oder welchen Zug du suchst. Ohne Datum und Zeit gilt «jetzt».</div>
+      <div class="status" id="status"></div>
       <div id="results"></div>
       <div id="onward"></div>
     </div>
@@ -261,7 +265,7 @@ const TYPE_ALIASES = [
 // Füllwörter, die nicht zum Bahnhofsnamen gehören ("am", "in" bewusst nicht: Frankfurt am Main, Weil am Rhein)
 const STOP_WORDS = new Set(("unterwegs ist sind der die das den dem im jetzt gerade grad momentan aktuell heute " +
   "fährt fahrt faehrt fahren fahrende läuft bitte zug zuges currently now today is running please train " +
-  "und ich bin möchte moechte will muss würde wuerde gerne gehen kommen reisen komme fahre").split(/\s+/));
+  "und ich bin möchte moechte will muss würde wuerde gerne gehen kommen reisen komme fahre ankommen eintreffen sein aus").split(/\s+/));
 // "hier", "mein Standort" usw. = aktueller Standort des Geräts
 const HERE_RE = /^(hier|da|standort|mein standort|meinem standort|meinen standort|aktueller standort|aktuellem standort|aktuellen standort|meiner position|meine position|wo ich bin)$/i;
 
@@ -277,6 +281,11 @@ function parseQuery(raw){
   if (!m) m = text.match(/^(.+?)\s*(?:→|->|–|—| - )\s*(.+)$/);
   if (!m) m = text.match(/^(.+?)\s+(?:nach|to)\s+(.+)$/i);
   if (m){ out.from = cleanStation(m[1], true); out.to = cleanStation(m[2], false); }
+  else if ((m = text.match(/(?:^|\s)(?:in|im|am|beim|bei)\s+(.+?)\s+(?:ankommen|eintreffen|sein)(?=\s|$)/i))){   // «in Zürich ankommen»
+    out.to = cleanStation(m[1], false);
+    const f = text.match(/\b(?:von|ab)\s+(.+?)\s+(?:in|im|am|beim|bei|um)\s/i);
+    if (f) out.from = cleanStation(f[1], true);
+  }
   else if ((m = text.match(/(?:^|\s)(?:nach|zum|zur|to)\s+(.+)$/i))){ out.to = cleanStation(m[1], false); }  // nur Ziel: Start = hier
   return out;
 }
@@ -284,6 +293,7 @@ function cleanStation(s, isFrom){
   let words = s.split(" ").filter(Boolean);
   if (isFrom){
     while (words.length && (STOP_WORDS.has(words[0].toLowerCase()) || /^(tgv|lyria|ice|ic|ec|ir|re|ter|moment)$/i.test(words[0]))) words.shift();
+    while (words.length > 1 && STOP_WORDS.has(words[words.length-1].toLowerCase())) words.pop();   // «von Basel aus»
   } else {
     const cut = words.findIndex(w => STOP_WORDS.has(w.toLowerCase().replace(/[.,;:]$/,"")));
     if (cut > 0) words = words.slice(0, cut);
@@ -653,7 +663,7 @@ function parseWhen(raw){
     if (!m[3] && ds < today) ds = (y+1)+"-"+pad(m[2])+"-"+pad(m[1]);
     if (+m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31){ out.date = ds; cut(m); }
   }
-  if (/\b(ankunft|ankommen|spätestens|spaetestens|da sein|dort sein)\b/i.test(text) || /\b(an|bis)\s+\d{1,2}(?:[:.h]\d{2})?\s*(?:uhr)?\b/i.test(text)) out.isArr = true;
+  if (/\b(ankunft|ankommen|eintreffen|spätestens|spaetestens|da sein|dort sein)\b/i.test(text) || /\bsein\s*$/i.test(text) || /\b(an|bis)\s+\d{1,2}(?:[:.h]\d{2})?\s*(?:uhr)?\b/i.test(text)) out.isArr = true;
   else if (/\b(abfahrt|abfahren|losfahren)\b/i.test(text) || /\bab\s+\d/i.test(text)) out.isArr = false;
   const T = [
     /\b(?:um|ab|an|bis|gegen)\s+(\d{1,2})(?:[:.h](\d{2}))?\s*(?:uhr)?(?=\s|$)/i,
@@ -663,7 +673,7 @@ function parseWhen(raw){
   for (const re of T){
     if ((m = text.match(re))) { const h = +m[1], mi = +(m[2]||0); if (h < 24 && mi < 60){ out.time = pad(h)+":"+pad(mi); cut(m); break; } }
   }
-  text = text.replace(/\b(ankunft|abfahrt|ankommen|abfahren|losfahren|spätestens|spaetestens|da sein|dort sein)\b/ig," ");
+  text = text.replace(/\b(da|dort)\s+sein\b/ig," sein ").replace(/\b(ankunft|abfahrt|abfahren|losfahren|spätestens|spaetestens)\b/ig," ");
   out.rest = text.replace(/\s+/g," ").replace(/\s+([,.])/g,"$1").trim();
   return out;
 }
@@ -1063,31 +1073,76 @@ async function refreshExtra(){
 }
 
 /* ---------- Suche ---------- */
-let modePref = "auto", abArr = false;
-const refNow = () => state.atTime || new Date();
+const MODES = {
+  route: {
+    go: "Route suchen",
+    placeholder: "z. B. «Von hier nach Zürich HB» oder «Basel SBB nach Bern morgen um 8»",
+    status: "Schreib Start und Ziel, z. B. «von hier nach Zürich HB». Start und Ziel können Haltestellen, Adressen oder «hier» sein. Datum und Zeit leer = jetzt.",
+    examples: ["Von hier nach Zürich HB", "Zürich, Bahnhofstrasse 1 nach Luzern", "Basel SBB nach Bern morgen Ankunft 9 Uhr", "Ich bin in Thun und möchte nach Interlaken Ost"]
+  },
+  track: {
+    go: "Zug suchen",
+    placeholder: "z. B. «TGV von Paris Gare de Lyon nach Basel SBB»",
+    status: "Schreib Zugtyp und Strecke, z. B. «IC von Zürich HB nach Bern», optional mit Zugnummer. Angezeigt werden Züge, die jetzt unterwegs sind.",
+    examples: ["TGV von Paris Gare de Lyon nach Basel SBB", "ICE von Basel SBB nach Frankfurt (Main) Hbf", "IC von Zürich HB nach Bern", "EC von Zürich HB nach Milano Centrale"]
+  }
+};
+let modePref = "route", abArr = false;
+try { const m = localStorage.getItem("zt-mode"); if (m === "track" || m === "route") modePref = m; } catch(e){}
+const refNow = () => new Date();
 function setAb(isArr){ abArr = !!isArr; $("ab").querySelectorAll("button").forEach(b=>b.classList.toggle("on", (b.dataset.a==="an")===abArr)); }
-function setMode(m){ modePref = m; $("mode").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.m===m)); }
 function stopTimers(){ clearInterval(refreshTimer); clearInterval(tickTimer); }
+// Nur die Felder freigeben, die im Modus etwas bewirken
+function applyFields(mode){
+  const off = mode === "track";
+  $("dt").classList.toggle("off", off);
+  ["d","t"].forEach(id => { $(id).disabled = off; if (off) $(id).value = ""; });
+  $("ab").querySelectorAll("button").forEach(b => b.disabled = off);
+  $("now").disabled = off;
+  if (off) setAb(false);
+  $("dthint").hidden = !off;
+}
+function renderChips(){
+  $("chips").innerHTML = MODES[modePref].examples.map(e=>`<button type="button" class="chip">${esc(e)}</button>`).join("");
+  $("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ $("q").value=b.textContent; run(b.textContent); });
+}
+function clearResults(){
+  stopTimers(); route.active = false;
+  state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null};
+  onward = null; renderOnward();
+  $("results").innerHTML = ""; $("parsed").innerHTML = ""; layer.clearLayers();
+  document.body.classList.remove("has-results");
+}
+function setMode(m, {keepResults=false}={}){
+  const changed = m !== modePref;
+  modePref = m;
+  try { localStorage.setItem("zt-mode", m); } catch(e){}
+  $("mode").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.m===m));
+  $("go").textContent = MODES[m].go;
+  $("q").placeholder = MODES[m].placeholder;
+  renderChips(); applyFields(m);
+  if (changed && !keepResults){ clearResults(); $("q").value = ""; try{ history.replaceState(null,"",location.pathname); }catch(e){} }
+  if (!keepResults || changed) setStatus(MODES[m].status);
+}
 
 async function run(text, {silent=false}={}){
   lastText = text;
   const w = parseWhen(text);
+  const q = parseQuery(w.rest);
+  if (modePref === "track") return runTrack(q, text, silent);          // immer live
   if (!silent){ if (w.date) $("d").value = w.date; if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
   const when = {date:$("d").value || null, time:$("t").value || null, isArr:abArr};
-  const q = parseQuery(w.rest);
-  const mode = modePref !== "auto" ? modePref : ((q.type || q.number) ? "track" : "route");
-  if (mode === "route") return runRoute(q, when, text, silent);
-  return runTrack(q, when, text, silent);
+  return runRoute(q, when, text, silent);
 }
 
 async function runRoute(q, when, text, silent){
   let from = q.from || "hier", to = q.to;
   if (!to){
-    setStatus("Ich habe das Ziel nicht erkannt. Schreib z. B. «von hier nach Zürich HB» oder «Basel SBB nach Bern morgen um 8».", true);
+    setStatus("Ich habe das Ziel nicht erkannt. Schreib z. B. «von hier nach Zürich HB» oder «in Bern ankommen».", true);
     return;
   }
   const fromHere = HERE_RE.test(from), toHere = HERE_RE.test(to);
-  $("parsed").innerHTML = `Route planen · von <b>${esc(fromHere?"deinem Standort":from)}</b> nach <b>${esc(toHere?"deinem Standort":to)}</b>`;
+  $("parsed").innerHTML = `Route · von <b>${esc(fromHere?"deinem Standort":from)}</b> nach <b>${esc(toHere?"deinem Standort":to)}</b>`;
   if (!silent){ setStatus(fromHere||toHere ? "Ermittle deinen Standort …" : "Suche Verbindungen …"); $("go").disabled = true; onward = null; renderOnward(); }
   try{
     let here = route.here || null;
@@ -1105,9 +1160,9 @@ async function runRoute(q, when, text, silent){
     route = {active:true, list, sel, f, t, here:(fromHere||toHere)?here:null, qWhen, fetchedAt:new Date(),
              fromName: fromHere ? "deinem Standort"+(r.fromName?" ("+r.fromName+")":"") : (r.fromName||from),
              toName: toHere ? "deinem Standort" : (r.toName||to)};
-    state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null, atTime:null};
-    $("parsed").innerHTML = `Route planen · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(qWhen))}`;
-    setStatus(`${list.length} Verbindungen gefunden. Antippen für Details.`);
+    state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null};
+    $("parsed").innerHTML = `Route · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(qWhen))}`;
+    setStatus(`${list.length} ${list.length===1?"Verbindung":"Verbindungen"} gefunden. Antippen zeigt die Details.`);
     drawRouteMap(!silent); tickRoute(); enrichRoute(list[sel]);
     document.body.classList.add("has-results");
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
@@ -1122,70 +1177,55 @@ async function runRoute(q, when, text, silent){
   }
 }
 
-async function runTrack(q, when, text, silent){
-  const atTime = (when.date || when.time) ? zurichToDate(when.date || zurichParts(new Date()).date, when.time || zurichParts(new Date()).time) : null;
-  const live = !atTime || Math.abs(atTime - Date.now()) < 5*60000;
+async function runTrack(q, text, silent){
   $("parsed").innerHTML = q.from && q.to
-    ? `Zug verfolgen · <b>${esc(q.type||"jeder Zug")}</b>${q.number?" Nr. <b>"+esc(q.number)+"</b>":""} · von <b>${esc(q.from)}</b> nach <b>${esc(q.to)}</b>${live?"":" · Fahrplan-Ansicht für <b>"+esc(fmtDay(atTime))+"</b>"}`
+    ? `Zug live · <b>${esc(q.type||"jeder Zug")}</b>${q.number?" Nr. <b>"+esc(q.number)+"</b>":""} · von <b>${esc(q.from)}</b> nach <b>${esc(q.to)}</b>`
     : "";
   if (!q.from || !q.to){
-    setStatus("Ich habe Start und Ziel nicht erkannt. Schreib z. B. «TGV von Paris Gare de Lyon nach Basel SBB».", true);
+    setStatus("Ich habe Start und Ziel nicht erkannt. Schreib z. B. «TGV von Paris Gare de Lyon nach Basel SBB». Für «hier» oder Adressen wechsle zu «Route».", true);
     return;
   }
-  if (!silent){ setStatus("Suche läuft …"); $("go").disabled = true; onward = null; renderOnward(); }
+  if (!silent){ setStatus("Suche Züge …"); $("go").disabled = true; onward = null; renderOnward(); }
   try{
-    const ref = live ? new Date() : atTime;
-    const r = await findRunning(q, ref);
+    const r = await findRunning(q, new Date());
     if (silent) await refreshExtra();
     const prevSel = state.sel;
     const keep = silent ? state.extra : [];
     route.active = false;
-    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:new Date(), resolved:r.resolved, atTime: live ? null : atTime};
+    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:new Date(), resolved:r.resolved};
     state.sel = allTrips().some(t=>t.key===prevSel) ? prevSel : (r.running[0] && r.running[0].key);
     if (!silent || state.trips.length || state.extra.length)
-      setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} ${live?"unterwegs":"zu dieser Zeit unterwegs"}: ${r.resolved.from} → ${r.resolved.to}` : "");
+      setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} unterwegs: ${r.resolved.from} → ${r.resolved.to}` : "");
     drawRoutes(!silent); tick();
     document.body.classList.add("has-results");
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
     if (silent && onward && onward.data){ const o = onward; const tr = allTrips().find(t=>t.stops.includes(o.stop)); if (tr) openOnward(tr, tr.stops.indexOf(o.stop), true); }
-    saveUrl(text, when);
+    saveUrl(text, null);
   }catch(e){
     if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
   }finally{ $("go").disabled = false; }
   stopTimers();
   if (state.q){
-    if (!state.atTime) refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
+    refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
     tickTimer = setInterval(tick, TICK_MS);
   }
 }
-function fmtDay(d){ return d.toLocaleString("de-CH",{weekday:"short",day:"2-digit",month:"2-digit",hour:"2-digit",minute:"2-digit",timeZone:TZ}); }
 function saveUrl(text, when){
-  const u = new URLSearchParams(); u.set("q", text);
-  if (when.date) u.set("d", when.date); if (when.time) u.set("t", when.time); if (when.isArr) u.set("a","1");
-  if (modePref !== "auto") u.set("m", modePref);
+  const u = new URLSearchParams(); u.set("m", modePref); u.set("q", text);
+  if (when){ if (when.date) u.set("d", when.date); if (when.time) u.set("t", when.time); if (when.isArr) u.set("a","1"); }
   try{ history.replaceState(null,"","?"+u.toString()); }catch(e){}
 }
 
 /* ---------- Start ---------- */
-const EXAMPLES = [
-  "Von hier nach Zürich HB",
-  "Basel SBB nach Bern morgen Ankunft 9 Uhr",
-  "Zürich, Bahnhofstrasse 1 nach Luzern",
-  "TGV von Paris Gare de Lyon nach Basel SBB",
-  "IC von Zürich HB nach Bern",
-];
-$("chips").innerHTML = EXAMPLES.map(e=>`<button type="button" class="chip">${esc(e)}</button>`).join("");
-$("chips").querySelectorAll(".chip").forEach(b=>b.onclick=()=>{ $("q").value=b.textContent; run(b.textContent); });
 $("f").addEventListener("submit", ev=>{ ev.preventDefault(); run($("q").value); });
 $("q").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); run($("q").value); }});
 $("mode").querySelectorAll("button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));
 $("ab").querySelectorAll("button").forEach(b=>b.onclick=()=>setAb(b.dataset.a==="an"));
 $("now").onclick = ()=>{ $("d").value = ""; $("t").value = ""; setAb(false); };
 const P0 = new URLSearchParams(location.search);
-if (P0.get("d")) $("d").value = P0.get("d");
-if (P0.get("t")) $("t").value = P0.get("t");
-if (P0.get("a")==="1") setAb(true);
-if (P0.get("m")==="track" || P0.get("m")==="route") setMode(P0.get("m"));
+const m0 = P0.get("m")==="track" || P0.get("m")==="route" ? P0.get("m") : modePref;
+modePref = null; setMode(m0, {keepResults:true});
+if (m0 === "route"){ if (P0.get("d")) $("d").value = P0.get("d"); if (P0.get("t")) $("t").value = P0.get("t"); if (P0.get("a")==="1") setAb(true); }
 const initial = P0.get("q");
 if (initial){ $("q").value = initial; run(initial); }
 
