@@ -11,182 +11,200 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <style>
-/* Layout: Steuerpult links (gebürstetes Metall), Karte rechts; alles rechtwinklig, klare Kanten. */
+/* Layout: Steuerpult aus gebürstetem Stahl links, Karte rechts. Chrom-Flächen in Petrol/Dunkelblau, Signal-Orange als Akzent. Alles rechtwinklig. */
 :root{
   --blue:#005064; --orange:#f07c01; --navy:#253c48; --taupe:#918277; --teal:#027987; --sky:#46bdcf;
-  --bg:#eaf7fa; --panel:#ffffff; --panel2:#f1fafc; --text:#152a33; --muted:#4f6670; --line:#a9d9e2; --line2:#d6eef3;
-  --hi:rgba(255,255,255,.85); --lo:rgba(0,30,40,.18);
-  --ok:#027987; --warn:#d96d00; --bad:#c62828; --name:#027987;
-  --steel:linear-gradient(180deg,#ffffff 0%,#f0fafc 48%,#e0f3f7 52%,#f3fbfd 100%);
-  --brushed:repeating-linear-gradient(90deg,rgba(255,255,255,.05) 0 1px,rgba(0,0,0,.035) 1px 2px,rgba(255,255,255,0) 2px 4px);
-  --chrome-blue:linear-gradient(180deg,#3fb6c8 0%,#1fa5b8 45%,#058c9c 55%,#027987 100%);
-  --chrome-orange:linear-gradient(180deg,#ffb25c 0%,#ff8f1f 46%,#f07c01 54%,#ff9a33 100%);
-  --mono:"Nunito Sans",system-ui,sans-serif;
+  --bg:#d3dde2; --panel:#eef2f4; --panel2:#e2e9ec; --text:#10202a; --muted:#3f525b; --line:#8fa5ae; --line2:#c3d0d5;
+  --hi:rgba(255,255,255,.95); --lo:rgba(0,25,35,.28);
+  --ok:#00646f; --warn:#8a4300; --bad:#b3261e; --name:#005064; --accent-text:#005064; --ink-on-orange:#10202a;
+  /* gebürstetes Metall: feine Längsstreifen über einem Grundton */
+  --brushed:repeating-linear-gradient(90deg,rgba(255,255,255,.07) 0 1px,rgba(0,0,0,.04) 1px 2px,rgba(255,255,255,0) 2px 3px);
+  --steel:linear-gradient(180deg,#ffffff 0%,#f1f5f7 38%,#dbe4e8 50%,#cfdade 51%,#e9eff2 100%);
+  --steel-press:linear-gradient(180deg,#c9d5da 0%,#dfe7ea 100%);
+  --chrome-blue:linear-gradient(180deg,#027987 0%,#016b7b 42%,#00505f 50%,#003f4d 51%,#005466 100%);
+  --chrome-orange:linear-gradient(180deg,#ffb04a 0%,#ff9822 40%,#f07c01 50%,#e57200 51%,#ff8f14 100%);
+  --aside-bg:linear-gradient(180deg,#f3f6f7 0%,#e4eaed 100%);
+  --card-edge:#7f979f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --bg:#16262f; --panel:#1d313b; --panel2:#182b34; --text:#eaf6f9; --muted:#9fc0c9; --line:#2f5563; --line2:#25444f;
-    --hi:rgba(255,255,255,.1); --lo:rgba(0,0,0,.45); --name:#46bdcf; --bad:#ff6b5b; --warn:#ffa53f;
-    --steel:linear-gradient(180deg,#2a4653 0%,#213a45 48%,#1b323c 52%,#233e49 100%);
+    --bg:#0c1317; --panel:#18232a; --panel2:#121b20; --text:#eaf3f6; --muted:#a9bec6; --line:#4a616b; --line2:#2c3c44;
+    --hi:rgba(255,255,255,.12); --lo:rgba(0,0,0,.55);
+    --ok:#5fd6c5; --warn:#ffb04a; --bad:#ff7a6b; --name:#7fd6e3; --accent-text:#7fd6e3;
+    --steel:linear-gradient(180deg,#3a4c55 0%,#2b3a42 38%,#222f36 50%,#1b262c 51%,#26343b 100%);
+    --steel-press:linear-gradient(180deg,#141d22 0%,#1f2b31 100%);
+    --aside-bg:linear-gradient(180deg,#1d2a31 0%,#121b20 100%);
+    --card-edge:#557079;
     color-scheme:dark;
   }
 }
 :root[data-theme="dark"]{
-  --bg:#16262f; --panel:#1d313b; --panel2:#182b34; --text:#eaf6f9; --muted:#9fc0c9; --line:#2f5563; --line2:#25444f;
-  --hi:rgba(255,255,255,.1); --lo:rgba(0,0,0,.45); --name:#46bdcf; --bad:#ff6b5b; --warn:#ffa53f;
-  --steel:linear-gradient(180deg,#2a4653 0%,#213a45 48%,#1b323c 52%,#233e49 100%);
+  --bg:#0c1317; --panel:#18232a; --panel2:#121b20; --text:#eaf3f6; --muted:#a9bec6; --line:#4a616b; --line2:#2c3c44;
+  --hi:rgba(255,255,255,.12); --lo:rgba(0,0,0,.55);
+  --ok:#5fd6c5; --warn:#ffb04a; --bad:#ff7a6b; --name:#7fd6e3; --accent-text:#7fd6e3;
+  --steel:linear-gradient(180deg,#3a4c55 0%,#2b3a42 38%,#222f36 50%,#1b262c 51%,#26343b 100%);
+  --steel-press:linear-gradient(180deg,#141d22 0%,#1f2b31 100%);
+  --aside-bg:linear-gradient(180deg,#1d2a31 0%,#121b20 100%);
+  --card-edge:#557079;
   color-scheme:dark;
 }
 *{box-sizing:border-box}
 html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--text);font-family:"Nunito Sans",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.4}
 .app{display:grid;grid-template-columns:420px 1fr;height:100%;height:100dvh}
-aside{background:var(--brushed),var(--panel);border-right:3px solid var(--sky);display:flex;flex-direction:column;min-height:0;z-index:2;box-shadow:4px 0 14px rgba(0,0,0,.18)}
-/* Kopf: verchromtes Dunkelblau mit Orange-Kante */
-header{background:var(--brushed),var(--chrome-blue);color:#fff;padding:14px 16px 12px;border-bottom:3px solid var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.25)}
-header h1{margin:0;font-size:18px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;display:flex;align-items:center;gap:10px;text-shadow:0 1px 2px rgba(0,60,70,.55)}
-header h1 .dot{width:10px;height:10px;background:var(--orange);transform:rotate(45deg);box-shadow:0 0 0 2px rgba(255,255,255,.25);animation:blink 2s infinite}
-@keyframes blink{0%,100%{opacity:1}50%{opacity:.35}}
+aside{background:var(--brushed),var(--aside-bg);border-right:4px solid var(--orange);display:flex;flex-direction:column;min-height:0;z-index:2;box-shadow:6px 0 18px rgba(0,0,0,.28)}
+/* Kopf: Chromleiste mit Signalkante */
+header{background:var(--brushed),var(--chrome-blue);color:#fff;padding:14px 16px 12px;border-bottom:4px solid var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.35),inset 0 -1px 0 rgba(0,0,0,.4)}
+header h1{margin:0;font-size:19px;font-weight:800;letter-spacing:.16em;text-transform:uppercase;display:flex;align-items:center;gap:10px;text-shadow:0 1px 0 rgba(0,0,0,.45)}
+header h1 .dot{width:11px;height:11px;background:var(--chrome-orange);transform:rotate(45deg);box-shadow:0 0 0 2px rgba(255,255,255,.5),0 0 10px rgba(240,124,1,.8);animation:blink 2s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.45}}
 @media (prefers-reduced-motion: reduce){header h1 .dot{animation:none}}
-header p{margin:4px 0 0;font-size:12.5px;opacity:.95;letter-spacing:.02em;text-shadow:0 1px 1px rgba(0,60,70,.5)}
-form{padding:14px 16px 10px;border-bottom:1px solid var(--line);background:var(--panel2)}
-textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--line);border-radius:0;padding:10px 12px;font:inherit;background:var(--panel);color:var(--text);box-shadow:inset 0 2px 3px var(--lo)}
-textarea:focus{outline:none;border-color:var(--teal);box-shadow:inset 0 2px 3px var(--lo),0 0 0 2px rgba(2,121,135,.35)}
-.row{display:flex;gap:8px;margin-top:8px;align-items:center}
+header p{margin:4px 0 0;font-size:12.5px;letter-spacing:.02em;text-shadow:0 1px 0 rgba(0,0,0,.4)}
+form{padding:14px 16px 12px;border-bottom:2px solid var(--line)}
+textarea{width:100%;min-height:64px;resize:vertical;border:1px solid var(--card-edge);border-radius:0;padding:10px 12px;font:inherit;font-size:16px;background:var(--panel);color:var(--text);box-shadow:inset 0 2px 4px var(--lo)}
+textarea:focus{outline:none;border-color:var(--teal);box-shadow:inset 0 2px 4px var(--lo),0 0 0 3px rgba(2,121,135,.4)}
+.row{display:flex;gap:8px;margin-top:10px;align-items:center}
 button{font:inherit;cursor:pointer;border:0;border-radius:0;color:inherit}
-button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
-.primary{background:var(--chrome-orange);color:#fff;font-weight:800;letter-spacing:.12em;text-transform:uppercase;font-size:13.5px;padding:11px 16px;flex:1;border:1px solid #b85e00;box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 2px 0 rgba(0,0,0,.18);text-shadow:0 1px 0 rgba(0,0,0,.25)}
-.primary:hover{filter:brightness(1.05)}
-.primary:active{transform:translateY(1px);box-shadow:inset 0 1px 3px rgba(0,0,0,.3)}
+button:focus-visible,.card:focus-visible,.dep:focus-visible,.stops li:focus-visible{outline:3px solid var(--orange);outline-offset:2px}
+/* Hauptknopf: verchromtes Signal-Orange */
+.primary{background:var(--chrome-orange);color:var(--ink-on-orange);font-weight:800;letter-spacing:.14em;text-transform:uppercase;font-size:14px;padding:12px 16px;flex:1;border:1px solid #9a4d00;box-shadow:inset 0 1px 0 rgba(255,255,255,.7),inset 0 -2px 0 rgba(0,0,0,.18),0 3px 0 #8a4300,0 4px 8px rgba(0,0,0,.25)}
+.primary:hover{filter:brightness(1.06)}
+.primary:active{transform:translateY(2px);box-shadow:inset 0 2px 4px rgba(0,0,0,.35),0 1px 0 #8a4300}
 .primary:disabled{opacity:.6;cursor:wait}
-.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
-.chip{background:var(--steel);border:1px solid var(--line);color:var(--text);padding:4px 9px;font-size:12px;font-weight:600;box-shadow:inset 0 1px 0 var(--hi)}
-.chip:hover{border-color:var(--teal);color:var(--teal)}
+.chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+.chip{background:var(--steel);border:1px solid var(--card-edge);color:var(--text);padding:5px 9px;font-size:12px;font-weight:700;box-shadow:inset 0 1px 0 var(--hi),0 1px 2px var(--lo)}
+.chip:hover{border-color:var(--teal);color:var(--accent-text)}
 .content{overflow:auto;padding:12px 16px 20px;flex:1;min-height:0}
-.status{font-size:13px;color:var(--muted);margin:2px 0 10px;font-weight:600}
+.status{font-size:13px;color:var(--muted);margin:2px 0 10px;font-weight:700}
 .status.err{color:var(--bad)}
-.parsed{font-size:11.5px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em}
+.parsed{font-size:11.5px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.06em;font-weight:700}
 .parsed b{color:var(--text)}
-/* Fahrt-Karten: Metallplatte, rechtwinklig, Akzentkante bei Auswahl */
-.card{border:1px solid var(--line);border-radius:0;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--steel);box-shadow:inset 0 1px 0 var(--hi),0 1px 2px var(--lo);position:relative}
+/* Karten: Aluminiumplatte mit Fase */
+.card{border:1px solid var(--card-edge);border-radius:0;padding:12px 14px;margin-bottom:10px;cursor:pointer;background:var(--steel);box-shadow:inset 0 1px 0 var(--hi),inset 0 -1px 0 rgba(0,0,0,.08),0 2px 4px var(--lo);position:relative}
 .card:hover{border-color:var(--teal)}
-.card.sel{border-color:var(--teal);box-shadow:inset 4px 0 0 var(--orange),inset 0 1px 0 var(--hi),0 3px 10px var(--lo)}
+.card.sel{border-color:var(--blue);box-shadow:inset 6px 0 0 var(--orange),inset 0 1px 0 var(--hi),0 4px 12px var(--lo)}
 .card .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .card .name{font-weight:800;font-size:17px;letter-spacing:.04em;color:var(--name);text-transform:uppercase}
-.tag{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#fff;background:var(--teal);padding:1px 5px;margin-left:8px;vertical-align:middle}
+.tag{font-size:10.5px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#fff;background:var(--chrome-blue);padding:1px 6px;margin-left:8px;vertical-align:middle}
 .badge{font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:3px 7px;white-space:nowrap;border:1px solid currentColor}
-.badge.ok{color:var(--ok);background:rgba(2,121,135,.08)}
-.badge.late{color:var(--warn);background:rgba(240,124,1,.1)}
+.badge.ok{color:var(--ok);background:rgba(2,121,135,.1)}
+.badge.late{color:var(--ink-on-orange);background:var(--chrome-orange);border-color:#9a4d00}
 .badge.na{color:var(--muted);background:transparent}
-.badge.bad{color:#fff;background:var(--bad);border-color:var(--bad)}
+.badge.bad{color:#fff;background:#b3261e;border-color:#b3261e}
 .sub{color:var(--muted);font-size:13px;margin-top:2px}
-.bar{height:8px;background:var(--panel2);border:1px solid var(--line);margin:10px 0 6px;overflow:hidden;box-shadow:inset 0 1px 2px var(--lo)}
-.bar>i{display:block;height:100%;background:repeating-linear-gradient(90deg,rgba(255,255,255,.25) 0 2px,transparent 2px 8px),var(--chrome-orange)}
+.bar{height:9px;background:var(--panel2);border:1px solid var(--card-edge);margin:10px 0 6px;overflow:hidden;box-shadow:inset 0 1px 3px var(--lo)}
+.bar>i{display:block;height:100%;background:repeating-linear-gradient(90deg,rgba(255,255,255,.3) 0 2px,transparent 2px 9px),var(--chrome-orange)}
 .kv{display:grid;grid-template-columns:auto 1fr;gap:3px 12px;font-size:13.5px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line2)}
-.kv dt{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.08em;font-weight:700;padding-top:2px}
+.kv dt{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.08em;font-weight:800;padding-top:2px}
 .kv dd{margin:0;font-weight:700;font-variant-numeric:tabular-nums}
-.alert{margin-top:8px;border-left:4px solid var(--bad);padding:5px 8px;font-size:13px;background:rgba(179,38,30,.08)}
+.alert{margin-top:8px;border-left:5px solid #b3261e;padding:5px 8px;font-size:13px;background:rgba(179,38,30,.1)}
 .alert b{display:block;text-transform:uppercase;font-size:11.5px;letter-spacing:.06em;color:var(--bad)}
 .stops{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
 .stops li{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center;padding:6px 4px;font-size:13.5px;border-bottom:1px solid var(--line2);cursor:pointer}
-.stops li:hover{background:rgba(70,189,207,.14)}
+.stops li:hover{background:rgba(70,189,207,.18)}
 .stops li .d{width:9px;height:9px;border:2px solid var(--teal);background:var(--panel)}
 .stops li.past{color:var(--muted)}
 .stops li.past .d{background:var(--teal)}
 .stops li.cur .d{background:var(--orange);border-color:var(--orange);transform:rotate(45deg)}
 .stops li.cxl{color:var(--bad);text-decoration:line-through}
-.stops .tm{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;font-weight:700}
+.stops .tm{font-variant-numeric:tabular-nums;text-align:right;white-space:nowrap;font-weight:800}
 .stops .tm s{color:var(--muted);margin-right:4px;font-weight:400}
-.stops .cx{font-size:10.5px;color:#fff;background:var(--teal);font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-left:6px;padding:1px 5px;white-space:nowrap}
+.stops .cx{font-size:10.5px;color:#fff;background:var(--chrome-blue);font-weight:800;letter-spacing:.08em;text-transform:uppercase;margin-left:6px;padding:1px 6px;white-space:nowrap}
 .hint{font-size:11.5px;color:var(--muted);margin-top:6px}
-.note{font-size:11.5px;color:var(--muted);border-top:3px solid var(--sky);padding:9px 16px;line-height:1.4;background:var(--panel2)}
-.note a{color:var(--teal)}
-#map{height:100%;width:100%;background:#dff2f6}
-/* Karte etwas entsättigt, damit die Strecke klar heraussticht */
-.leaflet-tile-pane{filter:grayscale(.35) saturate(1.1) brightness(1.04)}
-.leaflet-bar{border-radius:0!important;border:1px solid #7d8b92!important;box-shadow:0 2px 6px rgba(0,0,0,.25)!important}
-.leaflet-bar a{border-radius:0!important;background:linear-gradient(180deg,#fbfcfc,#dfe5e8)!important;color:#14232b!important}
-/* Zug-Marker: quadratische Metallplakette */
-.train-icon{background:var(--chrome-orange);color:#fff;border:2px solid #fff;outline:1px solid #8a4700;width:32px!important;height:32px!important;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 8px rgba(0,0,0,.45);font-size:16px}
-.train-icon.other{background:var(--chrome-blue);outline-color:#015a64}
-.train-icon.extra{background:linear-gradient(180deg,#0aa0b3,#027987 50%,#01606b 52%,#028392);outline-color:#014a52}
-.leaflet-tooltip.trainlbl{font-family:"Nunito Sans",sans-serif;font-weight:800;letter-spacing:.06em;color:#fff;background:#027987;border:1px solid #015a64;border-radius:0;padding:3px 8px;box-shadow:0 2px 6px rgba(0,0,0,.35)}
-.leaflet-tooltip.trainlbl::before{border-top-color:#027987}
+.note{font-size:11.5px;color:var(--muted);border-top:3px solid var(--orange);padding:9px 16px;line-height:1.4;background:var(--brushed),var(--panel2)}
+.note a{color:var(--accent-text);font-weight:700}
+#map{height:100%;width:100%;background:#cbd8dd}
+.leaflet-tile-pane{filter:saturate(1.15) contrast(1.06)}
+.leaflet-bar{border-radius:0!important;border:1px solid #4a616b!important;box-shadow:0 3px 8px rgba(0,0,0,.35)!important}
+.leaflet-bar a{border-radius:0!important;background:linear-gradient(180deg,#ffffff,#d8e1e5)!important;color:#10202a!important;font-weight:800}
+/* Zug-Marker: Chromplakette */
+.train-icon{background:var(--chrome-orange);color:#10202a;border:2px solid #fff;outline:1px solid #8a4300;width:32px!important;height:32px!important;display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.5);font-size:16px}
+.train-icon.other{background:var(--chrome-blue);color:#fff;outline-color:#002a35}
+.train-icon.extra{background:var(--chrome-blue);color:#fff;outline-color:#002a35}
+.leaflet-tooltip.trainlbl{font-family:"Nunito Sans",sans-serif;font-weight:800;letter-spacing:.06em;color:#fff;background:#005064;border:1px solid #002a35;border-radius:0;padding:3px 8px;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+.leaflet-tooltip.trainlbl::before{border-top-color:#005064}
 .leaflet-tooltip{border-radius:0}
 .leaflet-container{font-family:"Nunito Sans",sans-serif}
-.stopsq{background:#fff;border:2px solid #027987;box-shadow:0 1px 3px rgba(0,0,0,.35)}
-.stopsq.end{background:#f07c01;border-color:#fff;outline:1px solid #c66300}
+.stopsq{background:#fff;border:2px solid #005064;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.stopsq.end{background:#f07c01;border-color:#fff;outline:1px solid #8a4300}
 .stopsq.cxl{border-color:#b3261e}
-.platchg{background:var(--orange);color:#fff;padding:0 5px;font-weight:800}
+.platchg{background:var(--chrome-orange);color:var(--ink-on-orange);padding:0 5px;font-weight:800}
 .empty{color:var(--muted);font-size:14px;padding:6px 0}
 .small{font-size:12px;color:var(--muted)}
 .list{font-size:13.5px;margin:6px 0 0;padding-left:18px}
 /* Anschlüsse: Abfahrtstafel */
 #onward{margin-top:16px}
-.ow-head{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--brushed),var(--chrome-blue);color:#fff;padding:8px 10px;border-bottom:3px solid var(--orange)}
-.ow-head h2{font-size:13.5px;margin:0;font-weight:800;letter-spacing:.1em;text-transform:uppercase}
-.ow-close{white-space:nowrap;flex:none;background:transparent;color:#fff;font-size:12px;padding:2px 6px;border:1px solid rgba(255,255,255,.5);letter-spacing:.06em;text-transform:uppercase}
+.ow-head{display:flex;justify-content:space-between;align-items:center;gap:8px;background:var(--brushed),var(--chrome-blue);color:#fff;padding:8px 10px;border-bottom:4px solid var(--orange);box-shadow:inset 0 1px 0 rgba(255,255,255,.3)}
+.ow-head h2{min-width:0;overflow-wrap:anywhere;font-size:13.5px;margin:0;font-weight:800;letter-spacing:.1em;text-transform:uppercase;text-shadow:0 1px 0 rgba(0,0,0,.4)}
+.ow-close{white-space:nowrap;flex:none;background:transparent;color:#fff;font-size:12px;padding:2px 6px;border:1px solid rgba(255,255,255,.6);letter-spacing:.06em;text-transform:uppercase}
 #onward > .small{margin-top:6px}
-.tabs{display:flex;gap:0;flex-wrap:nowrap;overflow-x:auto;margin:8px 0;border:1px solid var(--line)}
-.tab{flex:1 0 auto;border-right:1px solid var(--line);background:var(--steel);color:var(--text);padding:6px 6px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;box-shadow:inset 0 1px 0 var(--hi)}
+.tabs{display:flex;gap:0;flex-wrap:nowrap;overflow-x:auto;margin:8px 0;border:1px solid var(--card-edge)}
+.tab{flex:1 0 auto;border-right:1px solid var(--card-edge);background:var(--steel);color:var(--text);padding:7px 6px;font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;box-shadow:inset 0 1px 0 var(--hi)}
 .tab:last-child{border-right:0}
-.tab.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 4px rgba(0,0,0,.35)}
+.tab.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 5px rgba(0,0,0,.45)}
 .tab:disabled{opacity:.4;cursor:default}
 .dep{display:grid;grid-template-columns:52px 64px 1fr auto;gap:8px;align-items:center;padding:7px 4px;border-bottom:1px solid var(--line2);font-size:13.5px;cursor:pointer}
-.dep:hover{background:rgba(70,189,207,.14)}
+.dep:hover{background:rgba(70,189,207,.18)}
 .dep .tm{font-variant-numeric:tabular-nums;font-weight:800}
 .dep .tm s{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
-.line{display:inline-block;min-width:46px;text-align:center;font-weight:800;font-size:12.5px;padding:2px 6px;background:var(--teal);color:#fff;letter-spacing:.03em;box-shadow:inset 0 1px 0 rgba(255,255,255,.2)}
+.line{display:inline-block;min-width:46px;text-align:center;font-weight:800;font-size:12.5px;padding:2px 6px;background:#00505f;color:#fff;letter-spacing:.03em;box-shadow:inset 0 1px 0 rgba(255,255,255,.3),inset 0 -1px 0 rgba(0,0,0,.25)}
 .dep .to{min-width:0}
 .dep .to b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .dep .to span{font-size:12px;color:var(--muted)}
 .dep .pl{font-size:12.5px;text-align:right;white-space:nowrap;font-weight:800;font-variant-numeric:tabular-nums}
 .dep.cxl .to b,.dep.cxl .tm{color:var(--bad);text-decoration:line-through}
 /* Suche: Modus, Datum/Zeit */
-.seg{display:flex;margin-top:8px;border:1px solid var(--line)}
-.seg button{flex:1 1 0;white-space:nowrap;background:var(--steel);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.05em;text-transform:uppercase;padding:7px 6px;border-right:1px solid var(--line);box-shadow:inset 0 1px 0 var(--hi)}
+.seg{display:flex;margin-top:10px;border:1px solid var(--card-edge);box-shadow:0 1px 2px var(--lo)}
+.seg button{flex:1 1 0;white-space:nowrap;background:var(--steel);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:8px 6px;border-right:1px solid var(--card-edge);box-shadow:inset 0 1px 0 var(--hi)}
 .seg button:last-child{border-right:0}
-.seg button.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 4px rgba(0,0,0,.3)}
-.dt{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;margin-top:8px;align-items:end}
+.seg button.on{background:var(--chrome-blue);color:#fff;box-shadow:inset 0 2px 5px rgba(0,0,0,.45);text-shadow:0 1px 0 rgba(0,0,0,.4)}
+.dt{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:6px 8px;margin-top:10px;align-items:end}
 .fld{display:flex;flex-direction:column;gap:2px;min-width:0}
 .fld span{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
-.fld input{font:inherit;font-size:16px;border:1px solid var(--line);border-radius:0;padding:6px 8px;height:38px;background:var(--panel);color:var(--text);min-width:0;max-width:100%;width:100%;display:block;-webkit-appearance:none;appearance:none;box-shadow:inset 0 1px 2px var(--lo)}
+.fld input{font:inherit;font-size:16px;border:1px solid var(--card-edge);border-radius:0;padding:6px 8px;height:40px;background:var(--panel);color:var(--text);min-width:0;max-width:100%;width:100%;display:block;box-shadow:inset 0 2px 3px var(--lo)}
+.fld input:focus{outline:none;border-color:var(--teal);box-shadow:inset 0 2px 3px var(--lo),0 0 0 3px rgba(2,121,135,.4)}
 .fld input::-webkit-date-and-time-value{text-align:left}
-.dt .seg{margin-top:0;height:38px}
+.fld input.bad{border-color:#b3261e;box-shadow:0 0 0 3px rgba(179,38,30,.3)}
+.dt .seg{margin-top:0;height:40px}
 .dt .seg button{padding:0 10px}
-.nowbtn{height:38px;background:var(--steel);border:1px solid var(--line);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:0 8px;box-shadow:inset 0 1px 0 var(--hi)}
+.nowbtn{height:40px;background:var(--steel);border:1px solid var(--card-edge);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:0 8px;box-shadow:inset 0 1px 0 var(--hi),0 1px 2px var(--lo)}
+.nowbtn:active,.seg button:active,.pager button:active,.chip:active{background:var(--steel-press)}
 .dt.off .fld,.dt.off .seg,.dt.off .nowbtn{opacity:.4}
 .dt input:disabled,.dt button:disabled{cursor:not-allowed}
 .dthint{grid-column:1/-1;font-size:11.5px;color:var(--muted);line-height:1.35}
 /* Routen */
 .rt .name{font-variant-numeric:tabular-nums}
 .chain{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin-top:8px}
-.chain .wk{font-size:11.5px;color:var(--muted);font-weight:700}
+.chain .wk{font-size:11.5px;color:var(--muted);font-weight:800}
 .chain .ar{color:var(--muted);font-size:11px}
-.g-train{background:#027987!important}.g-s{background:#46bdcf!important;color:#06303a!important}.g-tram{background:#f07c01!important}.g-bus{background:#253c48!important}.g-other{background:#918277!important}
+.g-train{background:#00505f!important;color:#fff!important}
+.g-s{background:#46bdcf!important;color:#06303a!important}
+.g-tram{background:var(--chrome-orange)!important;color:#10202a!important}
+.g-bus{background:#253c48!important;color:#fff!important}
+.g-other{background:#5f544c!important;color:#fff!important}
 .legs{list-style:none;padding:0;margin:10px 0 0;border-top:1px solid var(--line)}
 .legs li{display:grid;grid-template-columns:44px 1fr;gap:10px;padding:8px 0;border-bottom:1px solid var(--line2);font-size:13.5px}
 .legs .lt{font-variant-numeric:tabular-nums;font-weight:800;line-height:1.35}
 .legs .lt s{display:block;font-weight:400;color:var(--muted);font-size:11.5px}
 .legs li.walk{color:var(--muted);font-size:13px}
-.legs li.walk .lt{font-weight:600}
+.legs li.walk .lt{font-weight:700}
 .legs .rd b{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .legs .rd div{margin-top:2px}
-.legs .live{margin-top:4px;font-size:12.5px;font-weight:700;color:var(--teal)}
-.legs .live.run{color:var(--orange)}
-.legs li.xfer{display:block;padding:4px 0 4px 54px;font-size:12px;font-weight:700;color:var(--muted);border-bottom:1px solid var(--line2)}
+.legs .live{margin-top:4px;font-size:12.5px;font-weight:800;color:var(--accent-text)}
+.legs .live.run{color:var(--warn)}
+.legs li.xfer{display:block;padding:4px 0 4px 54px;font-size:12px;font-weight:800;color:var(--muted);border-bottom:1px solid var(--line2)}
 .legs li.xfer.warn{color:var(--bad)}
-.legs .lnk{background:none;padding:0;color:var(--teal);font-size:12px;font-weight:800;text-decoration:underline;margin-top:3px}
+.legs .lnk{background:none;padding:0;color:var(--accent-text);font-size:12px;font-weight:800;text-decoration:underline;margin-top:3px}
 .pager{display:flex;gap:6px;margin:4px 0 10px}
-.pager button{flex:1;background:var(--steel);border:1px solid var(--line);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:7px;box-shadow:inset 0 1px 0 var(--hi)}
+.pager button{flex:1;background:var(--steel);border:1px solid var(--card-edge);color:var(--text);font-size:11.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:8px;box-shadow:inset 0 1px 0 var(--hi),0 1px 2px var(--lo)}
 .train-icon.lbl{font-size:10.5px;font-weight:800;letter-spacing:0;line-height:1;text-align:center;overflow:hidden}
-.train-icon.idle{opacity:.55}
-.youmk{background:#46bdcf;border:3px solid #fff;outline:2px solid #027987;box-shadow:0 0 0 6px rgba(70,189,207,.3)}
-.endmk{background:#253c48;color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;outline:1px solid #253c48}
+.train-icon.idle{opacity:.6}
+.youmk{background:#46bdcf;border:3px solid #fff;outline:2px solid #005064;box-shadow:0 0 0 7px rgba(70,189,207,.35)}
+.endmk{background:var(--chrome-blue);color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;outline:1px solid #002a35}
 @media (max-width:760px){
   .app{grid-template-columns:1fr;grid-template-rows:42vh 1fr}
   .mapwrap{order:-1}
-  aside{border-right:0;border-top:2px solid var(--navy);overflow:auto}
+  aside{border-right:0;border-top:4px solid var(--orange);overflow:auto}
   .content{overflow:visible;flex:none}
   body.has-results .chips{display:none}
   header{padding:10px 16px}
@@ -209,7 +227,7 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible{outline:2px solid va
       </div>
       <div class="dt" id="dt">
         <label class="fld"><span>Datum</span><input type="date" id="d"></label>
-        <label class="fld"><span>Zeit</span><input type="time" id="t"></label>
+        <label class="fld"><span>Zeit</span><input type="text" id="t" inputmode="numeric" placeholder="jetzt" maxlength="5" autocomplete="off" aria-label="Zeit (HH:MM)"></label>
         <div class="seg ab" id="ab" role="group" aria-label="Abfahrt oder Ankunft">
           <button type="button" data-a="ab" class="on">Ab</button>
           <button type="button" data-a="an">An</button>
@@ -650,7 +668,7 @@ function parseWhen(raw){
   const addDays = n => { const d = new Date(today+"T12:00:00"); d.setDate(d.getDate()+n); return isoDate(d); };
   const cut = m => { text = text.replace(m[0]," "); };
   let m;
-  if ((m = text.match(/\b(übermorgen|uebermorgen)\b/i))) { out.date = addDays(2); cut(m); }
+  if ((m = text.match(/(?:^|\s)(übermorgen|uebermorgen)(?=\s|$)/i))) { out.date = addDays(2); cut(m); }
   else if ((m = text.match(/\bmorgen\b/i))) { out.date = addDays(1); cut(m); }
   else if ((m = text.match(/\bheute\b/i))) { out.date = today; cut(m); }
   if ((m = text.match(/\b(?:am\s+)?(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/i))) {
@@ -690,7 +708,7 @@ function whenTxt(w){
 }
 
 /* ================= Routenplanung A → B ================= */
-const GROUP_COLOR = {train:"#027987", s:"#46bdcf", tram:"#f07c01", bus:"#253c48", other:"#918277"};
+const GROUP_COLOR = {train:"#00505f", s:"#1fa5b8", tram:"#f07c01", bus:"#253c48", other:"#5f544c"};
 let route = {active:false, list:[], sel:0};
 function getHere(){
   return new Promise((res, rej) => {
@@ -767,7 +785,7 @@ function drawRouteMap(fit){
   for (const l of r.legs){
     if (l.kind === "walk"){
       const p = [[l.from.lat,l.from.lon],[l.to.lat,l.to.lon]];
-      if (p.every(x => x[0]!=null)){ L.polyline(p,{color:"#4f6670",weight:3,dashArray:"2 7",lineCap:"round"}).addTo(layer); pts.push(...p); }
+      if (p.every(x => x[0]!=null)){ L.polyline(p,{color:"#253c48",weight:3,dashArray:"2 7",lineCap:"round"}).addTo(layer); pts.push(...p); }
       continue;
     }
     const t = l.trip, g = t.geom || t.stops.map(s=>[s.lat,s.lon]);
@@ -778,7 +796,7 @@ function drawRouteMap(fit){
       L.marker([s.lat,s.lon],{icon:L.divIcon({className:"stopsq"+(end?" end":""),iconSize:end?[12,12]:[8,8]}),keyboard:false})
         .bindTooltip(`<b>${esc(s.name)}</b><br>${s.arr?"an "+fmt(s.arr):""}${s.arr&&s.dep?" · ":""}${s.dep?"ab "+fmt(s.dep):""}`).addTo(layer);
     });
-    const icon = L.divIcon({className:"train-icon lbl g-"+l.group, html:esc(l.line.replace(/\s+/g,"").slice(0,5)), iconSize:[32,32], iconAnchor:[16,16]});
+    const icon = L.divIcon({className:"train-icon lbl g-"+l.group, html:esc(l.line.replace(/^(Tram|Bus|Schiff|Standseilbahn)\s+/,"").replace(/\s+/g,"").slice(0,4)), iconSize:[32,32], iconAnchor:[16,16]});
     const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:1000,title:l.line}).addTo(layer)
       .bindTooltip(esc(l.line+" → "+l.dest),{direction:"top",offset:[0,-20],className:"trainlbl"});
     trainMarkers.set(t.key, mk);
@@ -791,7 +809,8 @@ function drawRouteMap(fit){
 }
 function tickRoute(){
   const now = new Date(); const r = route.list[route.sel];
-  let pendingShown = false;   // von wartenden Fahrzeugen nur das nächste zeigen
+  const anyRunning = r && r.legs.some(l => { if (l.kind!=="ride") return false; const p = positionAt(l.trip, now); return p && (p.state==="moving"||p.state==="station"); });
+  let pendingShown = anyRunning;   // läuft eines, keine wartenden zeigen; sonst nur das nächste
   if (r) for (const l of r.legs){
     if (l.kind !== "ride") continue;
     const p = positionAt(l.trip, now), mk = trainMarkers.get(l.trip.key);
@@ -887,7 +906,7 @@ function drawRoutes(fit){
   for (const t of allTrips()){
     const isSel = t === sel;
     const pts = t.geom || t.stops.map(s=>[s.lat,s.lon]);
-    L.polyline(pts,{color:isSel?"#027987":(t.src==="tx"&&!t.fromSearch?"#46bdcf":"#46bdcf"),weight:isSel?5:3,opacity:isSel?.95:.6,lineCap:"butt",lineJoin:"miter",dashArray:isSel?null:"6 6"}).addTo(layer);
+    L.polyline(pts,{color:isSel?"#005064":"#027987",weight:isSel?5:3,opacity:isSel?.95:.6,lineCap:"butt",lineJoin:"miter",dashArray:isSel?null:"6 6"}).addTo(layer);
     if (isSel){
       passedLine = L.polyline([],{color:"#f07c01",weight:6,opacity:1,lineCap:"butt",lineJoin:"miter"}).addTo(layer);
       t.stops.forEach((s,i)=>{
@@ -1055,6 +1074,7 @@ async function follow(d){
     let t = null;
     if (d.tripId) t = await txSafe(()=>loadTxTrip(d.tripId));
     if (!t && d.od) t = buildTrip(d.od, d.od.stop);
+    if (!t) t = await followFallback(d);
     if (!t || t.stops.length < 2) throw new Error("Für diese Fahrt gibt es keine Streckendaten.");
     t.extraInfo = d;
     if (route.active){ route.active = false; stopTimers(); tickTimer = setInterval(tick, TICK_MS); refreshTimer = setInterval(async()=>{ await refreshExtra(); drawRoutes(false); tick(); }, REFRESH_MS); }
@@ -1064,6 +1084,15 @@ async function follow(d){
     drawRoutes(); tick();
     if (window.matchMedia("(max-width:760px)").matches) $("results").scrollIntoView({behavior:"smooth",block:"start"});
   }catch(e){ setStatus(e.message, true); }
+}
+async function followFallback(d){
+  const st = d.stopName || (onward && onward.stop && onward.stop.name); if (!st || !d.sched) return null;
+  const p = zurichParts(new Date(d.sched.getTime() - 5*60000));
+  const res = await api("/stationboard", {station:st, datetime:p.date+" "+p.time, limit:30});
+  const norm = x => String(x||"").replace(/\s+/g,"").toLowerCase();
+  const e = (res.stationboard||[]).find(e => { const sd = toDate(e.stop && e.stop.departure);
+    return sd && Math.abs(sd - d.sched) <= 3*60000 && (norm(odLabel(e)) === norm(d.line) || norm(e.to) === norm(d.to)); });
+  return e ? buildTrip(e, e.stop) : null;
 }
 async function refreshExtra(){
   for (let k=0;k<state.extra.length;k++){
@@ -1092,6 +1121,13 @@ try { const m = localStorage.getItem("zt-mode"); if (m === "track" || m === "rou
 const refNow = () => new Date();
 function setAb(isArr){ abArr = !!isArr; $("ab").querySelectorAll("button").forEach(b=>b.classList.toggle("on", (b.dataset.a==="an")===abArr)); }
 function stopTimers(){ clearInterval(refreshTimer); clearInterval(tickTimer); }
+// «8», «815», «0815», «8:15», «8.15», «8h15» → «08:15»
+function normTime(v){
+  const m = String(v||"").trim().match(/^(\d{1,2})(?:[:.h ]?(\d{2}))?$/);
+  if (!m) return null;
+  const h = +m[1], mi = +(m[2]||0);
+  return h < 24 && mi < 60 ? pad(h)+":"+pad(mi) : null;
+}
 // Nur die Felder freigeben, die im Modus etwas bewirken
 function applyFields(mode){
   const off = mode === "track";
@@ -1131,7 +1167,10 @@ async function run(text, {silent=false}={}){
   const q = parseQuery(w.rest);
   if (modePref === "track") return runTrack(q, text, silent);          // immer live
   if (!silent){ if (w.date) $("d").value = w.date; if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
-  const when = {date:$("d").value || null, time:$("t").value || null, isArr:abArr};
+  const tv = $("t").value.trim(), time = normTime(tv);
+  if (tv && !time){ $("t").classList.add("bad"); setStatus("Zeit bitte als Stunden und Minuten eingeben, z. B. 8:15 oder 0815.", true); return; }
+  if (time) $("t").value = time;
+  const when = {date:$("d").value || null, time, isArr:abArr};
   return runRoute(q, when, text, silent);
 }
 
@@ -1221,7 +1260,9 @@ $("f").addEventListener("submit", ev=>{ ev.preventDefault(); run($("q").value); 
 $("q").addEventListener("keydown", ev=>{ if (ev.key==="Enter" && !ev.shiftKey){ ev.preventDefault(); run($("q").value); }});
 $("mode").querySelectorAll("button").forEach(b=>b.onclick=()=>setMode(b.dataset.m));
 $("ab").querySelectorAll("button").forEach(b=>b.onclick=()=>setAb(b.dataset.a==="an"));
-$("now").onclick = ()=>{ $("d").value = ""; $("t").value = ""; setAb(false); };
+$("now").onclick = ()=>{ $("d").value = ""; $("t").value = ""; $("t").classList.remove("bad"); setAb(false); };
+$("t").addEventListener("input", ()=>{ $("t").classList.remove("bad"); $("t").value = $("t").value.replace(/[^0-9:.h ]/g,""); });
+$("t").addEventListener("blur", ()=>{ const v = $("t").value.trim(); if (!v) return; const n = normTime(v); if (n) $("t").value = n; else $("t").classList.add("bad"); });
 const P0 = new URLSearchParams(location.search);
 const m0 = P0.get("m")==="track" || P0.get("m")==="route" ? P0.get("m") : modePref;
 modePref = null; setMode(m0, {keepResults:true});
