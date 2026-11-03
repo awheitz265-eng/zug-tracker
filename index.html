@@ -304,7 +304,15 @@ const STOP_WORDS = new Set(("unterwegs ist sind der die das den dem im jetzt ger
 // "hier", "mein Standort" usw. = aktueller Standort des Geräts
 const HERE_RE = /^(hier|da|standort|mein standort|meinem standort|meinen standort|aktueller standort|aktuellem standort|aktuellen standort|meiner position|meine position|wo ich bin|mir|mich)$/i;
 // «zum SBB», «an den Bahnhof» = Hauptbahnhof des Orts
+// «HB»/«Hauptbahnhof» = Hauptbahnhof der nächsten Stadt, «SBB» = grosser Bahnhof in der Nähe, «Bahnhof» = Bahnhof des eigenen Orts
 const MAIN_RE = /^(?:(?:den|dem|der|die|das|de|em)\s+)?(sbb|hb|hbf|hauptbahnhof|bahnhof|bahnhof sbb|bhf|bf|gare|la gare|stazione|train station|main station)$/i;
+function mainKind(w){
+  w = w.toLowerCase().replace(/^(den|dem|der|die|das|de|em)\s+/,"");
+  if (/^(hb|hbf|hauptbahnhof|main station)$/.test(w)) return "@HB";
+  if (/^(sbb|bahnhof sbb)$/.test(w)) return "@SBB";
+  return "@BHF";
+}
+const isMain = x => /^@(HB|SBB|BHF)$/.test(x||"");
 const HOME_RE = /^(heim|hause|nach hause|zuhause|daheim|home)$/i;
 
 function parseQuery(raw){
@@ -392,7 +400,7 @@ function parseQuery(raw){
   if (out.line && out.from && !out.to && !out.stop){ out.stop = out.from; out.from = null; } // «Tram 4 ab Central»
   for (const k of ["from","to","stop","dir"]){
     if (!out[k]) continue;
-    if (MAIN_RE.test(out[k])) out[k] = "@MAIN";
+    if (MAIN_RE.test(out[k])) out[k] = mainKind(out[k]);
     else if (HOME_RE.test(out[k])) out[k] = "@HOME";
   }
   return out;
@@ -977,7 +985,7 @@ const tabOfMode = m => (m ? (TAB_OF[m] || "other") : "all");
 // Haltestelle per Name oder Standort finden
 async function placeToStop(name){
   if (!name || HERE_RE.test(name)){ const h = await getHere(); return {name:"deinem Standort", lat:h.lat, lon:h.lon, here:true}; }
-  if (name === "@MAIN") name = await mainStationNear(await getHere());
+  if (isMain(name)) name = await mainStationNear(await getHere(), name);
   const r = await api("/locations", {query:name, type:"station"});
   const s = (r.stations||[]).find(s => s.id && s.coordinate && s.coordinate.x != null);
   if (!s) throw new Error(`Haltestelle «${name}» nicht gefunden.`);
@@ -989,19 +997,136 @@ async function nearestStation(h){
   if (!s) throw new Error("In deiner Nähe finde ich keine Haltestelle.");
   return s.name;
 }
-// «zum SBB», «an den Bahnhof»: Hauptbahnhof des Orts, in dem ref liegt (Standort oder Ortsname)
+// Grosse Bahnhöfe der Schweiz: [Name, Breite, Länge, Rang] (Rang 1 = Hauptbahnhof einer Grossstadt).
+// Koordinaten aus transport.opendata.ch (/locations), abgefragt am 03.11.2026.
+const HUBS = [
+  ["Zürich HB",47.3782,8.5402,1],
+  ["Basel SBB",47.5474,7.5896,1],
+  ["Bern",46.9488,7.4391,1],
+  ["Genève",46.2102,6.1425,1],
+  ["Lausanne",46.5168,6.6291,1],
+  ["Luzern",47.0502,8.3102,1],
+  ["Winterthur",47.5003,8.7238,1],
+  ["St. Gallen",47.4232,9.3699,1],
+  ["Lugano",46.0055,8.947,1],
+  ["Biel/Bienne",47.1329,7.2429,1],
+  ["Thun",46.7549,7.6296,2],
+  ["Fribourg/Freiburg",46.8031,7.151,2],
+  ["Chur",46.8531,9.5289,2],
+  ["Schaffhausen",47.6983,8.6328,2],
+  ["Neuchâtel",46.9967,6.9357,2],
+  ["Olten",47.3519,7.9077,2],
+  ["Aarau",47.3914,8.0513,2],
+  ["Baden",47.4764,8.3077,2],
+  ["Zug",47.1737,8.5151,2],
+  ["Sion",46.2276,7.3592,2],
+  ["Solothurn",47.2042,7.5427,2],
+  ["Bellinzona",46.1954,9.0295,2],
+  ["Locarno",46.1724,8.8014,2],
+  ["Wil SG",47.4624,9.041,2],
+  ["Rapperswil SG",47.2249,8.8167,2],
+  ["Frauenfeld",47.5582,8.8966,2],
+  ["Uster",47.3504,8.7187,2],
+  ["Yverdon-les-Bains",46.7815,6.6409,2],
+  ["La Chaux-de-Fonds",47.0984,6.826,2],
+  ["Montreux",46.4359,6.9104,2],
+  ["Vevey",46.463,6.8434,2],
+  ["Interlaken Ost",46.6911,7.8703,2],
+  ["Brig",46.3194,7.9881,2],
+  ["Visp",46.294,7.8815,2],
+  ["Kreuzlingen",47.6525,9.1691,2],
+  ["Burgdorf",47.0607,7.6217,2],
+  ["Langenthal",47.2173,7.7847,2],
+  ["Wädenswil",47.2293,8.6752,2],
+  ["Liestal",47.4845,7.7314,2],
+  ["Delémont",47.362,7.3501,2],
+  ["Martigny",46.1058,7.0791,2],
+  ["Nyon",46.3844,6.236,2],
+  ["Morges",46.5111,6.494,2],
+  ["Renens VD",46.537,6.5789,2],
+  ["Glarus",47.0399,9.0716,2],
+  ["Herisau",47.3902,9.2768,2],
+  ["Arbon",47.5106,9.4334,2],
+  ["Romanshorn",47.5655,9.3794,2],
+  ["Buchs SG",47.1684,9.4786,2],
+  ["Sargans",47.0448,9.4463,2],
+  ["Landquart",46.9674,9.554,2],
+  ["Davos Platz",46.7918,9.821,2],
+  ["St. Moritz",46.498,9.8459,2],
+  ["Schwyz",47.0264,8.6322,2],
+  ["Arth-Goldau",47.049,8.5494,2],
+  ["Stans",46.9584,8.3666,2],
+  ["Sarnen",46.8946,8.2475,2],
+  ["Altdorf UR",46.8757,8.6316,2],
+  ["Spiez",46.6864,7.6801,2],
+  ["Lenzburg",47.3912,8.1704,2],
+  ["Brugg AG",47.4809,8.2088,2],
+  ["Wettingen",47.4596,8.316,2],
+  ["Dietikon",47.4058,8.405,2],
+  ["Bülach",47.5239,8.5362,2],
+  ["Wetzikon ZH",47.318,8.7923,2],
+  ["Horgen",47.2615,8.5969,2],
+  ["Pfäffikon SZ",47.203,8.7781,2],
+  ["Einsiedeln",47.1286,8.7445,2],
+  ["Gossau SG",47.4118,9.2531,2],
+  ["Rorschach",47.478,9.5051,2],
+  ["Weinfelden",47.5662,9.1064,2],
+  ["Emmenbrücke",47.0706,8.2826,2],
+  ["Sursee",47.1708,8.0979,2],
+  ["Zofingen",47.2881,7.9431,2],
+  ["Grenchen Süd",47.1888,7.3982,2],
+  ["Bulle",46.6192,7.053,2],
+  ["Payerne",46.8197,6.9399,2],
+  ["Mendrisio",45.8691,8.9786,2],
+  ["Chiasso",45.8322,9.0314,2],
+  ["Monthey",46.2557,6.9552,2],
+  ["Sierre/Siders",46.2921,7.5328,2],
+  ["Aigle",46.3169,6.9637,2],
+  ["Gstaad",46.4749,7.2842,2],
+  ["Zermatt",46.024,7.7478,2]
+];
+async function refPoint(ref){
+  if (ref && typeof ref === "object") return ref;
+  const r = await api("/locations", {query:ref});
+  const s = (r.stations||[]).find(s => s.coordinate && s.coordinate.x != null);
+  if (!s) throw new Error(`Ort «${ref}» nicht gefunden.`);
+  return {lat:s.coordinate.x, lon:s.coordinate.y};
+}
+function nearestHub(p, maxRank, maxM){
+  let best = null, bd = Infinity;
+  for (const h of HUBS){ if (h[3] > maxRank) continue; const d = distM([p.lat,p.lon],[h[1],h[2]]); if (d < bd){ bd = d; best = h; } }
+  return best && bd <= maxM ? best[0] : null;
+}
+// Bahnhof des Orts, in dem p liegt (Riehen → «Riehen»; Allschwil hat keinen → null).
+// Liegt der Ortsbahnhof weit weg (Zürich Oerlikon → Zürich HB 4 km), gilt ein Bahnhof gleich in der Nähe.
+async function townStation(p){
+  const d = s => distM([p.lat,p.lon],[s.coordinate.x,s.coordinate.y]);
+  const r = await api("/locations", {x:p.lat, y:p.lon, type:"station"});
+  const sts = (r.stations||[]).filter(s => s.id && s.coordinate && s.coordinate.x != null);
+  const near = sts.find(s => s.icon === "train" && !s.name.includes(",") && d(s) < 800);
+  const withTown = sts.find(s => s.name.includes(","));
+  let tr = null;
+  if (withTown){
+    const town = withTown.name.split(",")[0].trim();
+    const r2 = await api("/locations", {query:town, type:"station"});
+    tr = (r2.stations||[]).find(s => s.id && s.icon === "train" && s.coordinate && normName(s.name).startsWith(normName(town).split(" ")[0]) && d(s) < 8000) || null;
+  }
+  if (tr && (d(tr) <= 3000 || !near)) return tr.name;
+  return near ? near.name : null;
+}
+// «zum HB», «zum SBB», «an den Bahnhof» → konkreter Bahnhof. ref: Standort {lat,lon} oder Ortsname.
 const mainCache = new Map();
-async function mainStationNear(ref){
-  const r = typeof ref === "string" ? await api("/locations", {query:ref, type:"station"}) : await api("/locations", {x:ref.lat, y:ref.lon, type:"station"});
-  const sts = (r.stations||[]).filter(s => s.id);
-  if (!sts.length) throw new Error("Ich finde keinen Bahnhof in der Nähe.");
-  const withTown = sts.find(s => s.name.includes(","));          // «Basel, Barfüsserplatz» → Basel
-  const town = withTown ? withTown.name.split(",")[0].trim() : sts[0].name;
-  if (mainCache.has(town)) return mainCache.get(town);
-  const r2 = await api("/locations", {query:town, type:"station"});
-  const tr = (r2.stations||[]).find(s => s.id && s.icon === "train");
-  const name = tr ? tr.name : town;
-  mainCache.set(town, name);
+async function mainStationNear(ref, kind){
+  kind = kind || "@BHF";
+  const p = await refPoint(ref);
+  const key = kind+"|"+p.lat.toFixed(3)+","+p.lon.toFixed(3);
+  if (mainCache.has(key)) return mainCache.get(key);
+  let name = null;
+  if (kind === "@HB") name = nearestHub(p, 1, 25000) || nearestHub(p, 2, 40000) || await townStation(p);
+  else if (kind === "@SBB") name = nearestHub(p, 1, 12000) || await townStation(p) || nearestHub(p, 2, 40000);
+  else name = await townStation(p) || nearestHub(p, 2, 40000);
+  if (!name) throw new Error("Ich finde keinen Bahnhof in der Nähe. Schreib den Namen, z. B. «nach Basel SBB».");
+  mainCache.set(key, name);
   return name;
 }
 function optsTxt(q){
@@ -1069,7 +1194,19 @@ async function routeQuery(f, t, w, o){
   const notes = [];
   // Die API kennt «direkt» nicht zuverlässig: selbst filtern
   if (o.direct){ const d = list.filter(r => r.transfers === 0); if (d.length) list = d; else notes.push("Keine Verbindung ohne Umsteigen gefunden, gezeigt werden alle."); }
-  if (o.line){ const d = list.filter(r => r.legs.some(l => l.kind==="ride" && normLine(l.line) === normLine(o.line))); if (d.length) list = d; else notes.push("Keine Verbindung mit Linie "+o.line+" gefunden, gezeigt werden alle."); }
+  if (o.line){
+    const hasLine = r => r.legs.some(l => l.kind==="ride" && normLine(l.line) === normLine(o.line));
+    let d = list.filter(hasLine);
+    // zu wenige mit dieser Linie: bis zu zwei weitere Seiten später nachladen
+    for (let k = 0; k < 2 && d.length < 3 && !w.isArr && list.length; k++){
+      const last = list[list.length-1], p2 = zurichParts(new Date(last.dep.getTime()+60000));
+      const more = await api("/connections", {from:f, to:t, date:p2.date, time:p2.time, limit:10, "transportations[]": transpOf(o), "via[]": o.via || null});
+      const add = (more.connections||[]).map(buildRoute).filter(Boolean).filter(r => !list.some(x => x.key === r.key));
+      if (!add.length) break;
+      list = list.concat(add); d = list.filter(hasLine);
+    }
+    if (d.length) list = d; else { list = list.slice(0, 5); notes.push("Keine Verbindung mit Linie "+o.line+" gefunden, gezeigt werden alle."); }
+  }
   return {list: list.slice(0, 6), notes, fromName: res.from && res.from.name, toName: res.to && res.to.name};
 }
 async function enrichRoute(r){
@@ -1529,7 +1666,7 @@ async function runRoute(q, when, text, silent, alt){
   }
   if (from === "@HOME" || to === "@HOME"){ setStatus(HOME_MSG, true); return; }
   const fromHere = HERE_RE.test(from), toHere = HERE_RE.test(to);
-  const lbl = x => HERE_RE.test(x) ? "deinem Standort" : x === "@MAIN" ? "Bahnhof" : x;
+  const lbl = x => HERE_RE.test(x) ? "deinem Standort" : isMain(x) ? "Bahnhof" : x;
   $("parsed").innerHTML = `Route · von <b>${esc(lbl(from))}</b> nach <b>${esc(lbl(to))}</b>${optsTxt(q)}`;
   if (!silent){ setStatus(fromHere||toHere ? "Ermittle deinen Standort …" : "Suche Verbindungen …"); $("go").disabled = true; onward = null; renderOnward(); }
   try{
@@ -1539,9 +1676,9 @@ async function runRoute(q, when, text, silent, alt){
     let f = fromHere ? co(here) : from, t = toHere ? co(here) : to;
     if (silent && route.active && route.f && route.text === text){ f = route.f; t = route.t; }   // aufgelöste Bahnhöfe behalten
     else {
-      if (f === "@MAIN" || t === "@MAIN") setStatus("Suche den Bahnhof …");
-      if (f === "@MAIN") f = await mainStationNear(toHere ? here : t);
-      if (t === "@MAIN") t = await mainStationNear(fromHere ? here : f);
+      if (isMain(f) || isMain(t)) setStatus("Suche den Bahnhof …");
+      if (isMain(f)) f = await mainStationNear(toHere ? here : (isMain(t) ? await getHere() : t), f);
+      if (isMain(t)) t = await mainStationNear(fromHere ? here : f, t);
     }
     const nowP = zurichParts(new Date());
     const qWhen = silent && route.active && route.qWhen ? route.qWhen : {date: when.date || nowP.date, time: when.time || nowP.time, isArr: !!when.isArr};
@@ -1609,7 +1746,7 @@ function startLiveTimers(){
 // Fahrten, die jetzt zwischen A und B unterwegs sind (alle Verkehrsmittel)
 let abCache = null;   // {text, q}: aufgelöste Orte, damit die Aktualisierung nicht jedes Mal den Standort abfragt
 async function runAB(q, text, silent){
-  const lbl = x => HERE_RE.test(x||"hier") ? "deinem Standort" : x === "@MAIN" ? "Bahnhof" : x;
+  const lbl = x => HERE_RE.test(x||"hier") ? "deinem Standort" : isMain(x) ? "Bahnhof" : x;
   $("parsed").innerHTML = `Live · <b>${esc(whatTxt(q))}</b> · von <b>${esc(lbl(q.from))}</b> nach <b>${esc(lbl(q.to))}</b>`;
   if (!silent){ setStatus("Suche Fahrten …"); $("go").disabled = true; onward = null; renderOnward(); boardLayer.clearLayers(); }
   try{
@@ -1619,15 +1756,22 @@ async function runAB(q, text, silent){
       rq = Object.assign({}, q);
       const from = q.from || "hier";
       if (HERE_RE.test(from) || HERE_RE.test(q.to)){ if (!silent) setStatus("Ermittle deinen Standort …"); }
-      const here = (HERE_RE.test(from) || HERE_RE.test(q.to) || from === "@MAIN" && HERE_RE.test(q.to)) ? await getHere() : null;
+      const here = (HERE_RE.test(from) || HERE_RE.test(q.to)) ? await getHere() : null;
       rq.from = HERE_RE.test(from) ? await nearestStation(here) : from;
       rq.to = HERE_RE.test(q.to) ? await nearestStation(here) : q.to;
-      if (rq.from === "@MAIN") rq.from = await mainStationNear(rq.to === "@MAIN" ? await getHere() : rq.to);
-      if (rq.to === "@MAIN") rq.to = await mainStationNear(rq.from);
+      if (isMain(rq.from)) rq.from = await mainStationNear(isMain(rq.to) ? await getHere() : rq.to, rq.from);
+      if (isMain(rq.to)) rq.to = await mainStationNear(here && HERE_RE.test(from) ? here : rq.from, rq.to);
       abCache = {text, q: rq};
     }
     if (!silent) setStatus("Suche Fahrten …");
     const r = await findRunning(rq, new Date());
+    if (!silent && !r.running.length && !q.type && !q.number && !q.line && !state.extra.length){
+      // Nichts fährt ohne Umsteigen von A nach B (z. B. «von hier zum SBB»): Verbindungen mit Live-Position zeigen
+      setMode("route", {keepResults:true});
+      await run(text);
+      const st = $("status"); if (!st.classList.contains("err")) st.textContent = "Zwischen den beiden Orten ist gerade keine Fahrt ohne Umsteigen unterwegs. Hier die nächsten Verbindungen, die Fahrzeuge siehst du live auf der Karte. " + st.textContent;
+      return;
+    }
     if (silent) await refreshExtra();
     const prevSel = state.sel;
     const keep = silent ? state.extra : [];

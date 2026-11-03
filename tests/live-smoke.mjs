@@ -9,7 +9,15 @@ const shots = process.argv[2] || null;
 
 const ZH = {latitude:47.3770, longitude:8.5440};   // Zürich, Central
 const BS = {latitude:47.5548, longitude:7.5885};   // Basel, Barfüsserplatz
+const RI = {latitude:47.5840, longitude:7.6470};   // Riehen, Dorf
+const AW = {latitude:47.5510, longitude:7.5370};   // Allschwil, Dorf
+// [Modus, Standort, Eingabe, erwarteter Text (Status/Hinweis/Kopfzeile), Text, der in jeder Verbindung vorkommen muss]
 const CASES = [
+  ["route", RI, "Von hier zum SBB", /nach Basel SBB/i],
+  ["route", AW, "Von hier zum SBB", /nach Basel SBB/i],
+  ["route", AW, "mit dem 6er zum SBB", /nach Basel SBB/i, "Tram 6"],
+  ["route", RI, "zum Bahnhof", /nach Riehen/i],
+  ["route", ZH, "mit dem 4er zum HB", /nach Zürich HB/i, "Tram 4"],
   ["route", ZH, "Von hier zum SBB", /Verbindung/],
   ["route", BS, "Von hier zum SBB", /Verbindung/],
   ["route", ZH, "Morgen Nachmittag um fünf nach Luzern", /Verbindung/],
@@ -31,7 +39,7 @@ const CASES = [
 
 const browser = await chromium.launch();
 let n = 0, bad = 0;
-for (const [mode, geo, q, expect] of CASES){
+for (const [mode, geo, q, expect, every] of CASES){
   const ctx = await browser.newContext({geolocation: geo, permissions:["geolocation"], viewport:{width:1280, height:860}, locale:"de-CH", timezoneId:"Europe/Zurich"});
   const page = await ctx.newPage();
   const errors = [];
@@ -47,10 +55,13 @@ for (const [mode, geo, q, expect] of CASES){
     cards: document.querySelectorAll("#results .card").length,
     deps: document.querySelectorAll("#onward .dep").length,
     empty: (document.querySelector("#results .empty, #onward .empty")||{}).innerText || "",
+    chains: [...document.querySelectorAll("#results .card .chain")].map(c => c.innerText.replace(/\s+/g," ")),
   }));
-  const ok = !r.err && !errors.length && (expect ? expect.test(r.status + " " + r.empty) || r.cards > 0 : (r.cards + r.deps > 0 || r.empty));
+  const txt = r.parsed + " " + r.status + " " + r.empty;
+  let ok = !r.err && !errors.length && (expect ? expect.test(txt) : (r.cards + r.deps > 0 || r.empty));
+  if (every && !(r.chains.length && r.chains.every(c => c.toUpperCase().includes(every.toUpperCase())))) ok = false;
   if (!ok) bad++;
-  console.log(`${ok?"✓":"✗"} [${mode}→${r.mode}] «${q}»\n    ${r.parsed.replace(/\n/g," ")}\n    Status: ${r.status} | Karten ${r.cards} | Abfahrten ${r.deps}${r.empty?" | "+r.empty.slice(0,140):""}${errors.length?"\n    JS-Fehler: "+errors.join("; "):""}`);
+  console.log(`${ok?"✓":"✗"} [${mode}→${r.mode}] «${q}»\n    ${r.parsed.replace(/\n/g," ")}\n    Status: ${r.status} | Karten ${r.cards} | Abfahrten ${r.deps}${every?" | Ketten: "+r.chains.join(" / "):""}${r.empty?" | "+r.empty.slice(0,140):""}${errors.length?"\n    JS-Fehler: "+errors.join("; "):""}`);
   if (shots) await page.screenshot({path: path.join(shots, `smoke-${++n}.png`)});
   await ctx.close();
 }
