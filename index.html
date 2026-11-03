@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Zug-Tracker</title>
-<meta name="description" content="Routen mit Bahn, Tram und Bus planen und Züge live auf der Karte verfolgen.">
+<meta name="description" content="Routen mit Bahn, Tram, Bus und Schiff planen und jede Linie live auf der Karte verfolgen.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700;800&family=Barlow+Condensed:wght@600;700;800&display=swap" rel="stylesheet">
@@ -199,6 +199,9 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible,.stops li:focus-visi
 .pager button{flex:1;background:var(--steel);border:1px solid var(--card-edge);color:var(--text);font-family:var(--label-font);font-size:15px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;padding:6px;box-shadow:inset 0 1px 0 var(--hi),0 1px 2px var(--lo)}
 .train-icon.lbl{font-family:var(--label-font);font-size:13px;font-weight:800;letter-spacing:0;line-height:1;text-align:center;overflow:hidden}
 .train-icon.idle{opacity:.6}
+.train-icon.selv{outline:3px solid #12317f;box-shadow:0 0 0 5px rgba(240,124,1,.45),0 3px 10px rgba(0,0,0,.5)}
+.altbtn{background:var(--chrome-copper);color:var(--ink-on-copper);border:1px solid #8a4416;font-family:var(--label-font);font-size:13px;font-weight:800;letter-spacing:.04em;padding:0 6px;margin-left:6px;text-transform:none}
+.owf{margin-top:6px}
 .youmk{background:#2457d6;border:3px solid #fff;outline:2px solid #12317f;box-shadow:0 0 0 7px rgba(36,87,214,.3)}
 .endmk{background:var(--gunmetal);color:#fff;font-family:var(--label-font);font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;border:2px solid #fff;outline:1px solid #000}
 @media (max-width:760px){
@@ -217,13 +220,13 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible,.stops li:focus-visi
   <aside>
     <header>
       <h1><span class="dot"></span>Zug-Tracker</h1>
-      <p>Route mit Bahn, Tram und Bus planen oder Zug live verfolgen.</p>
+      <p>Route mit Bahn, Tram, Bus und Schiff planen oder jede Linie live verfolgen.</p>
     </header>
     <form id="f" autocomplete="off">
       <textarea id="q" aria-label="Suche"></textarea>
       <div class="seg" id="mode" role="group" aria-label="Modus">
         <button type="button" data-m="route" class="on">Route</button>
-        <button type="button" data-m="track">Zug live</button>
+        <button type="button" data-m="track">Live</button>
       </div>
       <div class="dt" id="dt">
         <label class="fld"><span>Datum</span><select id="d" aria-label="Datum"><option value="">Heute</option></select></label>
@@ -233,7 +236,7 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible,.stops li:focus-visi
           <button type="button" data-a="an">An</button>
         </div>
         <button type="button" class="nowbtn" id="now" title="Datum und Zeit leeren (= jetzt)">Jetzt</button>
-        <div class="dthint" id="dthint" hidden>Datum und Zeit gelten nur für «Route». «Zug live» zeigt immer die aktuelle Lage.</div>
+        <div class="dthint" id="dthint" hidden>Datum und Zeit gelten nur für «Route». «Live» zeigt immer die aktuelle Lage.</div>
       </div>
       <div class="row"><button class="primary" id="go" type="submit">Route suchen</button></div>
       <div class="chips" id="chips"></div>
@@ -278,24 +281,94 @@ const TYPE_ALIASES = [
   [/\b(interregio|ir)\b/i, "IR"],
   [/\b(regio\s*express|regioexpress|re)\b/i, "RE"],
   [/\b(ter)\b/i, "TER"],
-  [/\b(s-bahn)\b/i, "S"],
 ];
-// Füllwörter, die nicht zum Bahnhofsnamen gehören ("am", "in" bewusst nicht: Frankfurt am Main, Weil am Rhein)
+// Wörter für Verkehrsmittel → Gruppe (Reihenfolge: längere Wörter zuerst)
+const MODE_WORDS = [
+  ["standseilbahn|funiculaire|funi", "funicular"],
+  ["luftseilbahn|seilbahn|gondelbahn|gondel|sesselbahn|sessellift|bergbahn", "cableway"],
+  ["s-bahn|sbahn", "s"],
+  ["zahnradbahn|eisenbahn|bahn|zug|züge|zuege", "train"],
+  ["strassenbahn|trämli|traemli|trams|tram", "tram"],
+  ["nachtbus|postauto|postautos|trolleybus|ortsbus|autobus|büssli|buessli|busse|bus|car postal", "bus"],
+  ["kursschiff|schiffe|schiff|dampfer|boot|fähre|faehre", "ship"],
+  ["metro", "metro"],
+];
+const MODE_RE = MODE_WORDS.map(x=>x[0]).join("|");
+const modeOfWord = w => { w = w.toLowerCase(); for (const [ws,g] of MODE_WORDS) if (ws.split("|").includes(w)) return g; return null; };
+const MODE_TXT = {train:"Zug", s:"S-Bahn", tram:"Tram", bus:"Bus", ship:"Schiff", cableway:"Seilbahn", funicular:"Standseilbahn", metro:"Metro"};
+// Füllwörter, die nicht zum Haltestellennamen gehören ("am", "in" bewusst nicht: Frankfurt am Main, Weil am Rhein)
 const STOP_WORDS = new Set(("unterwegs ist sind der die das den dem im jetzt gerade grad momentan aktuell heute " +
   "fährt fahrt faehrt fahren fahrende läuft bitte zug zuges currently now today is running please train " +
-  "und ich bin möchte moechte will muss würde wuerde gerne gehen kommen reisen komme fahre ankommen eintreffen sein aus").split(/\s+/));
+  "und ich bin möchte moechte will muss würde wuerde gerne gehen kommen reisen komme fahre ankommen eintreffen sein aus " +
+  "mit ohne nächste nächster nächsten naechste naechster naechsten kommt bleibt steckt wo wann wie hin").split(/\s+/));
 // "hier", "mein Standort" usw. = aktueller Standort des Geräts
-const HERE_RE = /^(hier|da|standort|mein standort|meinem standort|meinen standort|aktueller standort|aktuellem standort|aktuellen standort|meiner position|meine position|wo ich bin)$/i;
+const HERE_RE = /^(hier|da|standort|mein standort|meinem standort|meinen standort|aktueller standort|aktuellem standort|aktuellen standort|meiner position|meine position|wo ich bin|mir|mich)$/i;
+// «zum SBB», «an den Bahnhof» = Hauptbahnhof des Orts
+const MAIN_RE = /^(?:(?:den|dem|der|die|das|de|em)\s+)?(sbb|hb|hbf|hauptbahnhof|bahnhof|bahnhof sbb|bhf|bf|gare|la gare|stazione|train station|main station)$/i;
+const HOME_RE = /^(heim|hause|nach hause|zuhause|daheim|home)$/i;
 
 function parseQuery(raw){
-  const text = raw.replace(/[«»"“”„?!]/g," ").replace(/\s+/g," ").trim();
-  const out = {type:null, number:null, from:null, to:null};
-  for (const [re,t] of TYPE_ALIASES){ if (re.test(text)){ out.type=t; break; } }
-  const num = text.match(/\b(?:tgv|lyria|ice|ic|ec|ir|re|rj|rjx|nj|en|ter|icn|ouigo|zug|nr\.?|nummer)\s*(\d{2,6})\b/i) || text.match(/\b(\d{3,6})\b/);
-  if (num) out.number = String(parseInt(num[1],10));
-  let m = text.match(/\bich bin\s+(?:gerade\s+|jetzt\s+)?(?:in der|in den|in|im|am|an der|an|beim|bei der|bei|auf dem|auf der)?\s*(.+?)\s+und\s+(?:möchte|moechte|will|muss|würde|wuerde)\s+(?:gerne\s+)?(?:nach|zum|zur|zu|ins|in die|in den)\s+(.+)$/i);
+  let text = " "+raw.replace(/[«»"“”„?!]/g," ").replace(/\s+/g," ").trim()+" ";
+  const out = {type:null, number:null, line:null, mode:null, from:null, to:null, dir:null, stop:null, intent:null,
+               opts:{direct:false, via:null, only:null, without:[]}};
+  const cut = m => { text = text.slice(0, m.index) + " " + text.slice(m.index + m[0].length); };
+  const find = src => text.match(rx(src));
+  let m;
+
+  // Absicht: «wo ist …», «wann kommt …», «Abfahrten …»
+  if ((m = find("^\\s*(?:und\\s+)?wo\\s+(?:ist|sind|bleibt|fährt|faehrt|fahren|steckt)\\b"))) { out.intent = "where"; cut(m); }
+  else if ((m = find("^\\s*wann\\s+(?:kommt|kommen|fährt|faehrt|fahren|geht|gehen)\\b"))) { out.intent = "when"; cut(m); }
+  if ((m = find("\\b(?:die\\s+)?(?:nächsten\\s+|naechsten\\s+)?(abfahrten|abfahrtstafel|abfahrtszeiten|was fährt|was faehrt|was geht|was kommt)\\b"))) { out.intent = "departures"; cut(m); }
+  while ((m = find("^\\s*(?:wie\\s+(?:komme|komm|kommt|gelange|fahre)\\s+(?:ich|man|me)|ich\\s+(?:will|möchte|moechte|muss|würde gerne|wuerde gerne|wott|möcht)(?:\\s+gerne)?|bring\\s+mich|zeig(?:e)?\\s+mir|zeige|zeig|route|verbindungen|verbindung|fahrplan|bitte|hallo|hoi|grüezi)\\b"))) cut(m);
+
+  // Optionen: «ohne Umsteigen», «über Olten»
+  if ((m = find("\\b(?:ohne\\s+umsteigen|ohne\\s+umstieg|ohne\\s+umzusteigen|umsteigefrei|direktverbindung|direkt)\\b"))) { out.opts.direct = true; cut(m); }
+  if ((m = find("\\b(?:über|ueber|via)\\s+(.+?)(?=\\s+(?:nach|zum|zur|zu|von|ab|mit|ohne|richtung|bis|in)\\s|\\s*$)"))) { out.opts.via = cleanStation(m[1], true); cut(m); }
+
+  // Linie: «Tram 4», «Bus Nr. 31», «der 11er», «S3», «N1», «M2», «IR 36»
+  const ART = "(?:(?:mit\\s+)?(?:dem|der|den|die|das|de|em|nächsten|naechsten|nächste|naechste|nächster|naechster)\\s+)?";
+  if ((m = find("\\b"+ART+"(tram|trämli|traemli|bus|büssli|buessli|postauto|nachtbus|trolleybus|ortsbus|linie|line|schiff|metro)\\s*(?:nr\\.?|nummer)?\\s*([a-z]?\\d{1,3}[a-z]?)\\b"))) {
+    out.line = m[2].toUpperCase(); out.mode = /^(linie|line)$/i.test(m[1]) ? null : modeOfWord(m[1]); cut(m);
+  } else if ((m = find("\\b"+ART+"(\\d{1,3})er(?:\\s+(tram|trämli|traemli|bus|büssli|buessli|postauto))?\\b"))) {
+    out.line = m[1]; out.mode = m[2] ? modeOfWord(m[2]) : null; cut(m);
+  } else if ((m = find("\\b"+ART+"(sn|s)\\s?(\\d{1,2})\\b"))) {
+    out.line = m[1].toUpperCase()+m[2]; out.mode = "s"; cut(m);
+  } else if ((m = find("\\b"+ART+"(n\\d{1,2})\\b"))) {
+    out.line = m[1].toUpperCase(); cut(m);
+  } else if ((m = find("\\b"+ART+"(m[12])\\b"))) {
+    out.line = m[1].toUpperCase(); out.mode = "metro"; cut(m);
+  } else if ((m = find("\\b"+ART+"(icn|ic|ir|re)\\s?(\\d{1,2})\\b"))) {
+    out.line = m[1].toUpperCase()+m[2]; out.mode = "train"; out.type = m[1].toUpperCase(); cut(m);
+  }
+
+  // Zugtyp und Zugnummer (Fernverkehr)
+  if (!out.line){
+    for (const [re,t] of TYPE_ALIASES){ if (re.test(text)){ out.type = t; break; } }
+    const num = text.match(/\b(?:tgv|lyria|ice|ic|ec|ir|re|rj|rjx|nj|en|ter|icn|ouigo|zug|nr\.?|nummer)\s*(\d{2,6})\b/i) || (out.type ? text.match(/\b(\d{3,6})\b/) : null);
+    if (num){ out.number = String(parseInt(num[1],10)); text = text.replace(num[0], " "+(num[0].replace(num[1],"")).trim()+" "); }
+    if (out.type){ out.mode = "train"; text = text.replace(/\b(tgv\s*lyria|tgv\s*inoui|railjet\s*xpress|regio\s*express|lyria|inoui|tgv|ouigo|ice|rjx|rj|railjet|nightjet|nj|euronight|en|eurocity|ec|icn|intercity|ic|interregio|ir|regioexpress|re|ter)\b/i, " "); }
+  }
+
+  // Verkehrsmittel ohne Linie: «nur Tram», «ohne Bus», «mit dem Schiff», «nächster Bus»
+  // nicht nach Ortspräpositionen («nach Zug» ist die Stadt Zug)
+  const MW = rx("(?<!(?:von|nach|ab|bis|in|zum|zur|über|ueber|via|richtung|aus|bei|an|und|à)\\s)\\b(?:(nur|mit|ohne)\\s+(?:mit\\s+)?(?:(?:dem|der|em|de|die|den)\\s+)?)?(?:(?:der|die|das|den|dem|de|em|nächste|naechste|nächster|naechster|nächsten|naechsten)\\s+)?("+MODE_RE+")\\b", "iu");
+  while ((m = text.match(MW))){
+    const g = modeOfWord(m[2]), w = (m[1]||"").toLowerCase();
+    if (w === "ohne") out.opts.without.push(g);
+    else if (w === "nur" || w === "mit"){ out.opts.only = out.opts.only || []; out.opts.only.push(g); if (!out.mode) out.mode = g; }
+    else if (!out.mode) out.mode = g;
+    cut(m);
+  }
+
+  // «in der Nähe», «um mich herum» = Standort
+  if ((m = find("\\b(?:hier\\s+)?(?:in der nähe|in der naehe|in meiner nähe|in meiner naehe|um mich herum|in der umgebung|bei mir)\\b"))) { out.stop = "hier"; cut(m); }
+  // Richtung
+  if ((m = find("\\b(?:in\\s+)?richtung\\s+(.+?)(?=\\s+(?:ab|von|bei|beim|an der|am|nach|vom)\\s|\\s*$)"))) { out.dir = cleanStation(m[1], false); cut(m); }
+
+  text = text.replace(/\s+/g," ").trim();
+  m = text.match(/\bich bin\s+(?:gerade\s+|jetzt\s+)?(?:in der|in den|in|im|am|an der|an|beim|bei der|bei|auf dem|auf der)?\s*(.+?)\s+und\s+(?:möchte|moechte|will|muss|würde|wuerde)\s+(?:gerne\s+)?(?:nach|zum|zur|zu|ins|in die|in den)\s+(.+)$/i);
   if (!m) m = text.match(/\bzwischen\s+(.+?)\s+und\s+(.+)$/i);
-  if (!m) m = text.match(/\b(?:von|ab|from|depuis)\s+(.+?)\s+(?:nach|bis|to|à|vers|richtung|zum|zur)\s+(.+)$/i);
+  if (!m) m = text.match(rx("\\b(?:von|vom|ab|from|depuis|de)\\s+(.+?)\\s+(?:nach|bis|to|à|vers|zum|zur|zu|ins|in die|in den|an den|an die|auf den|auf die)\\s+(.+)$"));
   if (!m) m = text.match(/^(.+?)\s*(?:→|->|–|—| - )\s*(.+)$/);
   if (!m) m = text.match(/^(.+?)\s+(?:nach|to)\s+(.+)$/i);
   if (m){ out.from = cleanStation(m[1], true); out.to = cleanStation(m[2], false); }
@@ -304,16 +377,34 @@ function parseQuery(raw){
     const f = text.match(/\b(?:von|ab)\s+(.+?)\s+(?:in|im|am|beim|bei|um)\s/i);
     if (f) out.from = cleanStation(f[1], true);
   }
-  else if ((m = text.match(/(?:^|\s)(?:nach|zum|zur|to)\s+(.+)$/i))){ out.to = cleanStation(m[1], false); }  // nur Ziel: Start = hier
+  else if ((m = text.match(rx("(?:^|\\s)(?:nach|zum|zur|zu|ins|in die|in den|an den|an die|auf den|auf die|to|heim|nach hause)(?:\\s+(.+))?$")))){   // nur Ziel: Start = hier
+    out.to = m[1] ? cleanStation(m[1], false) : (/heim|hause/i.test(m[0]) ? "heim" : null);
+    const f = text.slice(0, m.index).match(rx("\\b(?:von|vom|ab)\\s+(.+)$"));
+    if (f) out.from = cleanStation(f[1], true);
+  }
+  else if ((m = text.match(rx("(?:^|\\s)(?:ab|von|vom|an der haltestelle|haltestelle|station|bei der|beim|bei|an der|vor der|am|in|im)\\s+(.+)$")))){
+    out.stop = cleanStation(m[1], true);
+  }
+  else if (text && (out.line || out.mode || out.intent) && !out.stop){
+    const rest = cleanStation(text, true); if (rest) out.stop = rest;          // «Abfahrten Bern Bahnhof», «Tram 4 Central»
+  }
+  if (!out.line && out.dir && out.from && !out.to){ out.to = out.dir; out.dir = null; }   // «IC von Zürich Richtung Bern»
+  if (out.line && out.from && !out.to && !out.stop){ out.stop = out.from; out.from = null; } // «Tram 4 ab Central»
+  for (const k of ["from","to","stop","dir"]){
+    if (!out[k]) continue;
+    if (MAIN_RE.test(out[k])) out[k] = "@MAIN";
+    else if (HOME_RE.test(out[k])) out[k] = "@HOME";
+  }
   return out;
 }
 function cleanStation(s, isFrom){
-  let words = s.split(" ").filter(Boolean);
+  let words = String(s||"").split(" ").filter(Boolean);
   if (isFrom){
     while (words.length && (STOP_WORDS.has(words[0].toLowerCase()) || /^(tgv|lyria|ice|ic|ec|ir|re|ter|moment)$/i.test(words[0]))) words.shift();
     while (words.length > 1 && STOP_WORDS.has(words[words.length-1].toLowerCase())) words.pop();   // «von Basel aus»
   } else {
-    const cut = words.findIndex(w => STOP_WORDS.has(w.toLowerCase().replace(/[.,;:]$/,"")));
+    while (words.length > 1 && /^(den|dem|der|die|das|de|em)$/i.test(words[0])) words.shift();
+    const cut = words.findIndex((w,i) => i > 0 && STOP_WORDS.has(w.toLowerCase().replace(/[.,;:]$/,"")));   // erstes Wort bleibt («nach Zug»)
     if (cut > 0) words = words.slice(0, cut);
   }
   return words.join(" ").replace(/[.,;:]+$/,"").trim() || null;
@@ -413,7 +504,7 @@ function buildTrip(j, firstFallback){
   const first = stops[0], last = stops[stops.length-1];
   return {
     key: "od|"+(j.name||"")+"|"+(first && first.schedDep ? first.schedDep.toISOString() : ""),
-    src:"od", category: j.category||"", number: j.number||"", name: j.name||"",
+    src:"od", category: j.category||"", number: j.number||"", name: j.name||"", group: fineOd(j.category),
     label: odLabel(j), operator: j.operator||"", dest: j.to||"", stops, realtime,
     cap1: j.capacity1st, cap2: j.capacity2nd, alerts:[],
     start: first && (first.dep||first.schedDep), end: last && (last.arr||last.schedArr)
@@ -446,9 +537,12 @@ function txTrip(itin){
   }
   stops.forEach(s => (s.alerts||[]).forEach(a=>alerts.push(a)));
   const L = legs[0], first = stops[0], last = stops[stops.length-1];
-  const label = L.displayName || L.routeShortName || L.tripShortName || "Fahrt";
-  const t = { key:"tx|"+L.tripId, src:"tx", tripId:L.tripId, category: String(label).split(" ")[0], number:L.tripShortName||"", name:L.tripShortName||"",
-    label, operator:L.agencyName||"", dest:(L.tripTo&&L.tripTo.name)||L.headsign||"", stops, realtime, cancelled,
+  const group = fineTx(L.mode, L.displayName||L.routeShortName);
+  let label = L.displayName || L.routeShortName || L.tripShortName || "Fahrt";
+  const PFX = {tram:"Tram", bus:"Bus", ship:"Schiff", funicular:"Standseilbahn", cableway:"Seilbahn", metro:"Metro"};
+  if (/^[A-Z]{0,2}\d{1,3}[A-Z]?$/i.test(label) && PFX[group]) label = PFX[group]+" "+label;
+  const t = { key:"tx|"+L.tripId, src:"tx", tripId:L.tripId, group, category: String(label).split(" ")[0], number:L.tripShortName||"", name:L.tripShortName||"",
+    label, operator:(L.agencyName||"").replace(/\s+INFO\+$/,""), dest:(L.tripTo&&L.tripTo.name)||L.headsign||"", stops, realtime, cancelled,
     alerts: uniqAlerts(alerts), start:first.dep||first.schedDep, end:last.arr||last.schedArr };
   attachGeometry(t, pts);
   return t;
@@ -514,12 +608,12 @@ async function getJSON(url, label){
 }
 function api(path, params){
   const u = new URL(API + path);
-  for (const [k,v] of Object.entries(params)) if (v!==null && v!==undefined) u.searchParams.append(k, v);
+  for (const [k,v] of Object.entries(params)) for (const x of [].concat(v)) if (x!==null && x!==undefined) u.searchParams.append(k, x);
   return getJSON(u.toString(), "Die Fahrplan-Datenquelle");
 }
 function tx(path, params){
   const u = new URL(TX + path);
-  for (const [k,v] of Object.entries(params)) if (v!==null && v!==undefined) u.searchParams.append(k, v);
+  for (const [k,v] of Object.entries(params)) for (const x of [].concat(v)) if (x!==null && x!==undefined) u.searchParams.append(k, x);
   return getJSON(u.toString(), "Transitous");
 }
 const txAvailable = { ok:true, failedAt:0 };
@@ -574,15 +668,16 @@ async function enrich(od){
 // Sucht alle Fahrten, die jetzt zwischen from und to unterwegs sind.
 async function findRunning(q, now){
   const nowP = zurichParts(now);
-  const probe = await api("/connections", {from:q.from, to:q.to, date:nowP.date, time:nowP.time, limit:1});
-  if (!probe.connections || !probe.connections.length) throw new Error("Keine Verbindung gefunden. Sind die Bahnhofsnamen richtig geschrieben?");
+  const tp = transpOf({only: q.mode ? [q.mode] : null});
+  const probe = await api("/connections", {from:q.from, to:q.to, date:nowP.date, time:nowP.time, limit:1, "transportations[]":tp});
+  if (!probe.connections || !probe.connections.length) throw new Error("Keine Verbindung gefunden. Sind die Haltestellennamen richtig geschrieben?");
   const resolved = {from: probe.from && probe.from.name, to: probe.to && probe.to.name};
   const durMin = parseDuration(probe.connections[0].duration) || 180;
   const lookbackMin = Math.min(durMin + 90, 14*60);
   const startP = zurichParts(new Date(now.getTime() - lookbackMin*60000));
   const trips = new Map();
   for (let page=0; page<4; page++){
-    const res = await api("/connections", {from:q.from, to:q.to, date:startP.date, time:startP.time, limit:6, page});
+    const res = await api("/connections", {from:q.from, to:q.to, date:startP.date, time:startP.time, limit:6, page, "transportations[]":tp});
     const conns = res.connections || [];
     if (!conns.length) break;
     let reachedFuture = false;
@@ -604,7 +699,9 @@ async function findRunning(q, now){
   const everything = [...trips.values()];
   const all = everything.filter(isDirect);
   const partial = everything.filter(t => !isDirect(t));
-  const typeOk = t => !q.type || t.category.toUpperCase() === q.type || (q.type==="TGV" && /TGV|LYR/i.test(t.category));
+  const wantLine = q.line ? normLine(q.line) : null;
+  const typeOk = t => (!q.type || t.category.toUpperCase() === q.type || (q.type==="TGV" && /TGV|LYR/i.test(t.category)))
+    && (!wantLine || normLine(t.label) === wantLine) && modeOk(t.group, q.mode);
   const numOk  = t => !q.number || String(parseInt(t.name,10)) === q.number || t.number === q.number;
   const running = all.filter(t => typeOk(t) && numOk(t) && t.start <= now && t.end >= now);
   const nextDeps = all.filter(t => typeOk(t) && t.start > now).sort((a,b)=>a.start-b.start).slice(0,3);
@@ -618,6 +715,31 @@ function parseDuration(s){ const m = s && s.match(/(\d+)d(\d+):(\d+)/); return m
 const GROUPS = [
   ["all","Alle"], ["train","Zug"], ["s","S-Bahn"], ["tram","Tram"], ["bus","Bus"], ["other","Weitere"]
 ];
+// Feine Gruppen (für Filter) → grobe Gruppen (für Reiter und Farben)
+const coarse = g => (["ship","funicular","cableway","metro"].includes(g) ? "other" : g);
+function fineOd(cat){
+  const c = String(cat||"").toUpperCase();
+  if (/^(S|SN)$/.test(c)) return "s";
+  if (/^(T|TRAM|NFT)$/.test(c)) return "tram";
+  if (/^(B|BUS|NFB|EV|KB|BN|BP|EXB)$/.test(c)) return "bus";
+  if (/^(BAT|FAE|SCH)$/.test(c)) return "ship";
+  if (/^(FUN|SL)$/.test(c)) return "funicular";
+  if (/^(PB|GB|LB|SB)$/.test(c)) return "cableway";
+  if (/^(M|METRO)$/.test(c)) return "metro";
+  return "train";
+}
+function fineTx(mode, name){
+  const m = mode||"";
+  if (m==="TRAM") return "tram";
+  if (m==="BUS"||m==="COACH"||m==="TROLLEYBUS") return "bus";
+  if (m==="FERRY") return "ship";
+  if (m==="FUNICULAR") return "funicular";
+  if (/AERIAL|GONDOLA|CABLE/.test(m)) return "cableway";
+  if (m==="SUBWAY"||m==="METRO") return "metro";
+  if (m==="SUBURBAN" || (/RAIL/.test(m) && /^S\s?N?\d/i.test(name||""))) return "s";
+  return "train";
+}
+const modeOk = (g, want) => !want || g === want || (want==="train" && g==="s") || (want==="s" && g==="train");
 function groupOfTx(st){
   const m = st.mode, n = (st.displayName||st.routeShortName||"");
   if (m==="TRAM") return "tram";
@@ -626,27 +748,30 @@ function groupOfTx(st){
   if (/RAIL|LONG_DISTANCE/.test(m||"")) return "train";
   return "other";
 }
-function groupOfOd(e){
-  const c = (e.category||"").toUpperCase();
-  if (/^(S|SN)$/.test(c)) return "s";
-  if (/^(T|TRAM)$/.test(c)) return "tram";
-  if (/^(B|BUS|NFB|EV)$/.test(c)) return "bus";
-  if (/^(BAT|FAE|FUN|PB|GB|SL|CC|M)$/.test(c)) return "other";
-  return "train";
-}
+function groupOfOd(e){ return coarse(fineOd(e.category)); }
 async function loadOnward(stop, at){
   const time = new Date(Math.max(at ? at.getTime() : Date.now(), Date.now()) - 60000);
   const r = await txSafe(()=>tx("/v6/stoptimes", {center:stop.lat+","+stop.lon, radius:400, time:time.toISOString(), n:60, window:5400}));
   if (r && r.stopTimes){
-    return {src:"tx", deps: r.stopTimes.filter(st=>st.place).map(st=>{
+    const deps = r.stopTimes.filter(st=>st.place).map(st=>{
       const p = st.place, sched = toDate(p.scheduledDeparture), exp = toDate(p.departure)||sched;
       return { group:groupOfTx(st), line: st.displayName||st.routeShortName||st.tripShortName||"?", to:(st.tripTo&&st.tripTo.name)||st.headsign||"",
         stopName:p.name, sched, exp, rt:!!st.realTime, delay: st.realTime && sched && exp ? Math.round((exp-sched)/60000) : null,
         platform:p.track||p.scheduledTrack||"", platformChanged: !!(p.track&&p.scheduledTrack&&p.track!==p.scheduledTrack), schedPlatform:p.scheduledTrack,
-        cancelled: !!(st.cancelled||st.tripCancelled), tripId: st.tripId, color: st.routeColor };
-    }).filter(d=>d.sched).sort((a,b)=>a.exp-b.exp)};
+        cancelled: !!(st.cancelled||st.tripCancelled), tripId: st.tripId, color: st.routeColor, dist: distM([stop.lat,stop.lon],[p.lat,p.lon]) };
+    }).filter(d=>d.sched);
+    // Dieselbe Fahrt hält oft an mehreren Haltestellen im Umkreis: nur die nächstgelegene zeigen
+    const best = new Map();
+    for (const d of deps){ const k = d.tripId || (d.line+"|"+d.to+"|"+(+d.sched)); const b = best.get(k); if (!b || d.dist < b.dist) best.set(k, d); }
+    return {src:"tx", deps:[...best.values()].sort((a,b)=>a.exp-b.exp)};
   }
   // Fallback: Abfahrtstafel des Bahnhofs selbst (ohne nahe Tram-/Bushaltestellen)
+  if (!stop.id && stop.here){
+    const r2 = await api("/locations", {x:stop.lat, y:stop.lon, type:"station"});
+    const n = (r2.stations||[]).find(s => s.id);
+    if (!n) throw new Error("In deiner Nähe finde ich keine Haltestelle.");
+    stop = {id:n.id, name:n.name};
+  }
   const p = zurichParts(time);
   const res = await api("/stationboard", stop.id ? {id:stop.id, datetime:p.date+" "+p.time, limit:40} : {station:stop.name, datetime:p.date+" "+p.time, limit:40});
   return {src:"od", deps:(res.stationboard||[]).map(e=>{
@@ -659,39 +784,165 @@ async function loadOnward(stop, at){
 }
 
 /* ================= Datum, Zeit, Ab/An aus dem Text ================= */
+// Unicode-Wortgrenze: \b in JavaScript kennt keine Umlaute («übermorgen», «fünf»)
+const UB = "(?:(?<![\\p{L}\\p{N}])(?=[\\p{L}\\p{N}])|(?<=[\\p{L}\\p{N}])(?![\\p{L}\\p{N}]))";
+const rx = (src, f) => new RegExp(src.replace(/\\b/g, UB), f || "iu");
 const WD = ["sonntag","montag","dienstag","mittwoch","donnerstag","freitag","samstag"];
+const MONTHS = {januar:1,jan:1,"jänner":1,februar:2,feb:2,"märz":3,maerz:3,"mär":3,april:4,apr:4,mai:5,juni:6,jun:6,juli:7,jul:7,august:8,aug:8,september:9,sept:9,sep:9,oktober:10,okt:10,november:11,nov:11,dezember:12,dez:12};
+// Zahlwörter (Hochdeutsch und häufige Mundartformen)
+const NUMW = {ein:1,eins:1,eis:1,zwei:2,zwoi:2,drei:3,"drü":3,drue:3,vier:4,vieri:4,"fünf":5,fuenf:5,"föif":5,foif:5,"föifi":5,foifi:5,sechs:6,"sächsi":6,saechsi:6,sieben:7,sibe:7,sibni:7,acht:8,achti:8,neun:9,"nüün":9,"nüni":9,nueni:9,zehn:10,"zäh":10,"zähni":10,zaehni:10,elf:11,elfi:11,"zwölf":12,zwoelf:12,"zwölfi":12,zwoelfi:12};
+const MINW = {"fünf":5,fuenf:5,"föif":5,zehn:10,"zäh":10,viertel:15,zwanzig:20,"zwänzg":20,zwaenzg:20};
+const altOf = o => Object.keys(o).sort((a,b)=>b.length-a.length).join("|");
+const HR = "(\\d{1,2}|"+altOf(NUMW)+")";
+const MWORD = "("+altOf(MINW)+"|\\d{1,2}\\s*min(?:uten?)?)";
+const hourOf = s => /^\d/.test(s) ? +s : NUMW[s.toLowerCase()];
+const minOf = s => /^\d/.test(s) ? parseInt(s,10) : MINW[s.toLowerCase()];
+const DAYPART = {"früh":"frueh",frueh:"frueh",morgen:"morgen",morgens:"morgen",vormittag:"vormittag",vormittags:"vormittag",mittag:"mittag",mittags:"mittag",
+  nachmittag:"nachmittag",nachmittags:"nachmittag",abend:"abend",abends:"abend",nacht:"nacht",nachts:"nacht"};
+const DP_DEFAULT = {frueh:"07:00", morgen:"08:00", vormittag:"09:00", mittag:"12:00", nachmittag:"14:00", abend:"18:00", nacht:"22:00"};
+// Vorwörter vor einer Uhrzeit: legen fest, ob Abfahrt (ab) oder Ankunft (an) gemeint ist
+const PRE = "(kurz nach|kurz vor|nicht vor|nicht nach|nicht später als|spätestens um|spaetestens um|spätestens|spaetestens|frühestens um|fruehestens um|frühestens|fruehestens|so gegen|so um|gegen|um|ab|nach|vor|bis|an|ca\\.|circa|etwa|ungefähr|ungefaehr|am)";
+const PRE_ARR = /^(kurz vor|vor|bis|an|nicht nach|nicht später als|spätestens|spaetestens)/i;
+const PRE_DEP = /^(kurz nach|nach|ab|nicht vor|frühestens|fruehestens)/i;
 const isoDate = d => d.getFullYear()+"-"+pad(d.getMonth()+1)+"-"+pad(d.getDate());
-function parseWhen(raw){
-  let text = " "+raw.replace(/[«»"“”„?!]/g," ")+" ";
-  const out = {date:null, time:null, isArr:null};
-  const today = zurichParts(new Date()).date;
-  const addDays = n => { const d = new Date(today+"T12:00:00"); d.setDate(d.getDate()+n); return isoDate(d); };
-  const cut = m => { text = text.replace(m[0]," "); };
-  let m;
-  if ((m = text.match(/(?:^|\s)(übermorgen|uebermorgen)(?=\s|$)/i))) { out.date = addDays(2); cut(m); }
-  else if ((m = text.match(/\bmorgen\b/i))) { out.date = addDays(1); cut(m); }
-  else if ((m = text.match(/\bheute\b/i))) { out.date = today; cut(m); }
-  if ((m = text.match(/\b(?:am\s+)?(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\b/i))) {
-    const target = WD.indexOf(m[1].toLowerCase()), d0 = new Date(today+"T12:00:00");
-    out.date = addDays((target - d0.getDay() + 7) % 7); cut(m);
+const END = "(?=[\\s,;!?]|\\.(?:\\s|$)|$)";
+
+// Liest Datum, Zeit und Ab/An aus dem Satz und gibt den Rest (Orte, Linie) zurück.
+// now: Bezugszeit (für Tests einstellbar)
+function parseWhen(raw, now){
+  now = now || new Date();
+  let text = " "+raw.replace(/[«»"“”„?!]/g," ").replace(/\s+/g," ")+" ";
+  const out = {date:null, time:null, isArr:null, alt:null, says:[]};
+  const np = zurichParts(now), today = np.date, nowMin = +np.time.slice(0,2)*60 + +np.time.slice(3,5);
+  const addDays = (n, base) => { const d = new Date((base||today)+"T12:00:00"); d.setDate(d.getDate()+n); return isoDate(d); };
+  const cut = m => { text = text.slice(0, m.index) + " " + text.slice(m.index + m[0].length); };
+  const find = (src) => text.match(rx(src));
+  let m, dayPart = null, clock = null, explicitToday = false;
+
+  // «jetzt», «sofort» = keine Zeitangabe
+  while ((m = find("\\b(jetzt|sofort|gleich|grad|gerade|momentan|so schnell wie möglich|möglichst bald|asap)\\b"))) cut(m);
+
+  // relativ: «in 20 Minuten», «in einer halben Stunde», «in 2 Tagen»
+  let rel = null;
+  if ((m = find("\\bin\\s+(?:einer\\s+)?(halben|dreiviertel|viertel)\\s*stunde\\b"))) { rel = {halben:30, dreiviertel:45, viertel:15}[m[1].toLowerCase()]; cut(m); }
+  else if ((m = find("\\bin\\s+einer\\s+viertelstunde\\b"))) { rel = 15; cut(m); }
+  else if ((m = find("\\bin\\s+(\\d{1,3}(?:[.,]5)?|einer|einem|eine|ein|anderthalb|eineinhalb|zwei|drei|vier|fünf|zehn|zwanzig|dreissig|vierzig)\\s*(min\\.?|minuten|minute|std\\.?|stunden|stunde|h)\\b"))) {
+    const w = m[1].toLowerCase();
+    const n = {einer:1,einem:1,eine:1,ein:1,anderthalb:1.5,eineinhalb:1.5,zwei:2,drei:3,vier:4,"fünf":5,zehn:10,zwanzig:20,dreissig:30,vierzig:40}[w] ?? parseFloat(w.replace(",","."));
+    rel = /^(std|stunde|h)/i.test(m[2]) ? n*60 : n; cut(m);
   }
-  if ((m = text.match(/\b(?:am\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})?(?!\d)/))) {
-    const y0 = +today.slice(0,4); let y = m[3] ? (m[3].length===2 ? 2000 + +m[3] : +m[3]) : y0;
+  if (rel !== null){
+    const p = zurichParts(new Date(now.getTime() + rel*60000));
+    out.date = p.date; out.time = p.time; out.says.push("in "+(rel>=60 ? (rel/60).toString().replace(".",",")+" Std." : rel+" Min."));
+  }
+  if ((m = find("\\bin\\s+(\\d{1,2}|zwei|drei|vier|fünf)\\s+tagen\\b"))) {
+    const n = {zwei:2,drei:3,vier:4,"fünf":5}[m[1].toLowerCase()] ?? +m[1]; out.date = addDays(n); cut(m);
+  }
+
+  // Tag + Tageszeit: «morgen früh», «heute Abend», «morgen Nachmittag»
+  if ((m = find("\\b(heute|morgen|übermorgen|uebermorgen)\\s+(früh|frueh|morgen|vormittag|mittag|nachmittag|abend|nacht)\\b"))) {
+    const d = m[1].toLowerCase(); out.date = d==="heute" ? today : addDays(d==="morgen" ? 1 : 2);
+    explicitToday = d==="heute"; dayPart = DAYPART[m[2].toLowerCase()]; cut(m);
+  }
+  if ((m = find("\\bmitternacht\\b"))) { clock = {h:24, mi:0, fixed:true}; cut(m); }
+  if (!dayPart && (m = find("\\b(?:am|gegen|in der|zur|um die)\\s+(früh|frueh|morgen|vormittag|mittag|nachmittag|abend|nacht)\\b"))) { dayPart = DAYPART[m[1].toLowerCase()]; cut(m); }
+  if (!dayPart && (m = find("\\b(morgens|vormittags|mittags|nachmittags|abends|nachts|früh|frueh)\\b"))) { dayPart = DAYPART[m[1].toLowerCase()]; cut(m); }
+  if (!out.date){
+    if ((m = find("\\b(übermorgen|uebermorgen)\\b"))) { out.date = addDays(2); cut(m); }
+    else if ((m = find("\\bmorgen\\b"))) { out.date = addDays(1); cut(m); }
+    else if ((m = find("\\bheute\\b"))) { out.date = today; explicitToday = true; cut(m); }
+  }
+  if (!dayPart && (m = find("\\bheute\\s+nacht\\b"))) { dayPart = "nacht"; cut(m); }
+
+  // Wochentag: «am Montag», «nächsten Freitag», «übernächsten Dienstag», «am Wochenende»
+  let weekPlus = 0;
+  if ((m = find("\\b(nächste|naechste|kommende)\\s+woche\\b"))) { weekPlus = 7; cut(m); }
+  if ((m = find("\\b(?:(übernächsten|uebernaechsten|nächsten|naechsten|kommenden|diesen|am)\\s+)?(montag|dienstag|mittwoch|donnerstag|freitag|samstag|sonntag)\\b"))) {
+    const target = WD.indexOf(m[2].toLowerCase()), d0 = new Date(today+"T12:00:00");
+    let diff = (target - d0.getDay() + 7) % 7;
+    const w = (m[1]||"").toLowerCase();
+    if (/^(nächsten|naechsten)$/.test(w) && diff === 0) diff = 7;
+    if (/^(übernächsten|uebernaechsten)$/.test(w)) diff += 7;
+    out.date = addDays(diff + weekPlus); cut(m);
+  } else if ((m = find("\\b(?:am|übers|ueber das|über das)\\s+wochenende\\b"))) {
+    const d0 = new Date(today+"T12:00:00"); const dw = d0.getDay();
+    out.date = addDays(dw === 6 || dw === 0 ? 0 : 6 - dw); cut(m);
+  } else if (weekPlus) out.date = addDays(7);
+
+  // Datum: «am 5.11.», «5.11.2026», «am 5. November»
+  if ((m = text.match(/(?:^|\s)(?:am\s+)?(\d{1,2})\.(\d{1,2})\.(\d{4}|\d{2})?(?!\d)/))) {
+    const y0 = +today.slice(0,4); const y = m[3] ? (m[3].length===2 ? 2000 + +m[3] : +m[3]) : y0;
     let ds = y+"-"+pad(m[2])+"-"+pad(m[1]);
     if (!m[3] && ds < today) ds = (y+1)+"-"+pad(m[2])+"-"+pad(m[1]);
     if (+m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31){ out.date = ds; cut(m); }
+  } else if ((m = find("\\b(?:am\\s+)?(\\d{1,2})\\.?\\s+("+altOf(MONTHS)+")\\.?\\b(?:\\s+(\\d{4}))?"))) {
+    const mo = MONTHS[m[2].toLowerCase()], y0 = +today.slice(0,4);
+    let ds = (m[3]||y0)+"-"+pad(mo)+"-"+pad(m[1]);
+    if (!m[3] && ds < today) ds = (y0+1)+"-"+pad(mo)+"-"+pad(m[1]);
+    if (+m[1] >= 1 && +m[1] <= 31){ out.date = ds; cut(m); }
   }
-  if (/\b(ankunft|ankommen|eintreffen|spätestens|spaetestens|da sein|dort sein)\b/i.test(text) || /\bsein\s*$/i.test(text) || /\b(an|bis)\s+\d{1,2}(?:[:.h]\d{2})?\s*(?:uhr)?\b/i.test(text)) out.isArr = true;
-  else if (/\b(abfahrt|abfahren|losfahren)\b/i.test(text) || /\bab\s+\d/i.test(text)) out.isArr = false;
-  const T = [
-    /\b(?:um|ab|an|bis|gegen)\s+(\d{1,2})(?:[:.h](\d{2}))?\s*(?:uhr)?(?=\s|$)/i,
-    /\b(\d{1,2})[:.](\d{2})\s*(?:uhr)?(?=\s|$)/i,
-    /\b(\d{1,2})\s*uhr\b/i,
+
+  // Uhrzeit (erste passende Form gewinnt)
+  let pre = "";
+  const P = "(?:"+PRE+"\\s+)?";
+  const forms = [
+    // «fünf vor halb neun» = 8:25, «zehn nach halb acht» = 7:40
+    [P+MWORD+"\\s+(nach|ab|vor)\\s+halbi?\\s+"+HR+"\\b", m => { const h = hourOf(m[4])-1, d = minOf(m[2]); return {h, mi: 30 + (/vor/i.test(m[3]) ? -d : d)}; }],
+    // «Viertel nach acht», «zehn vor neun», «viertel ab achti»
+    [P+MWORD+"\\s+(nach|ab|vor)\\s+"+HR+"(?:\\s*uhr)?\\b", m => { const h = hourOf(m[4]), d = minOf(m[2]); return /vor/i.test(m[3]) ? {h:h-1, mi:60-d} : {h, mi:d}; }],
+    [P+"(?:dreiviertel|drei viertel)\\s+"+HR+"\\b", m => ({h:hourOf(m[2])-1, mi:45})],
+    [P+"halbi?\\s+"+HR+"\\b", m => ({h:hourOf(m[2])-1, mi:30})],
+    [P+"(\\d{1,2})[:.h](\\d{2})(?:\\s*uhr)?"+END, m => ({h:+m[2], mi:+m[3], lead0:/^0/.test(m[2])})],
+    [P+HR+"\\s*uhr(?:\\s+(\\d{1,2}))?\\b", m => ({h:hourOf(m[2]), mi:+(m[3]||0), lead0:/^0/.test(m[2])})],
+    [P+"(\\d{1,2})h"+END, m => ({h:+m[2], mi:0, lead0:/^0/.test(m[2])})],
+    [PRE+"\\s+"+HR+END, m => (/^am$/i.test(m[1]) && /^\d/.test(m[2])) ? null : {h:hourOf(m[2]), mi:0, lead0:/^0/.test(m[2])}],
   ];
-  for (const re of T){
-    if ((m = text.match(re))) { const h = +m[1], mi = +(m[2]||0); if (h < 24 && mi < 60){ out.time = pad(h)+":"+pad(mi); cut(m); break; } }
+  if (!clock && rel === null){
+    for (const [src, fn] of forms){
+      const re = rx(src); let mm = text.match(re);
+      if (!mm) continue;
+      const c = fn(mm);
+      if (!c || isNaN(c.h) || c.h < 0 || c.h > 24 || c.mi < 0 || c.mi > 59) continue;
+      if (c.h === 0 && c.mi < 0) continue;
+      clock = c; pre = (mm[1]||"").toLowerCase(); cut(mm); break;
+    }
   }
-  text = text.replace(/\b(da|dort)\s+sein\b/ig," sein ").replace(/\b(ankunft|abfahrt|abfahren|losfahren|spätestens|spaetestens)\b/ig," ");
+
+  // Ab oder An
+  if (PRE_ARR.test(pre)) out.isArr = true;
+  else if (PRE_DEP.test(pre)) out.isArr = false;
+  if (out.isArr === null){
+    if (rx("\\b(ankunft|ankommen|eintreffen|spätestens|spaetestens|da sein|dort sein|zurück sein)\\b").test(text) || /\bsein\s*$/i.test(text)) out.isArr = true;
+    else if (rx("\\b(abfahrt|abfahren|losfahren|los)\\b").test(text)) out.isArr = false;
+  }
+
+  // Tageszeit anwenden, Mehrdeutigkeit (8 = 08:00 oder 20:00?) auflösen
+  if (clock){
+    let {h, mi} = clock;
+    if (h === 24){ h = 0; if (!out.date) out.date = addDays(1); }
+    const t = x => pad(x)+":"+pad(mi);
+    if (dayPart){
+      if ((dayPart === "nachmittag" || dayPart === "abend") && h < 12) h += 12;
+      else if (dayPart === "nacht" && h >= 6 && h < 12) h += 12;
+      else if (dayPart === "nacht" && h === 12) h = 0;
+      else if (dayPart === "mittag" && h >= 1 && h <= 5) h += 12;
+      out.time = t(h);
+    } else if (h >= 1 && h <= 11 && !clock.lead0){
+      if (!out.date || out.date === today){
+        const am = h*60+mi, pm = am+720;
+        if (am >= nowMin-15){ out.time = t(h); out.alt = {date: out.date, time: t(h+12)}; }
+        else if (pm >= nowMin-15 || explicitToday){ out.time = t(h+12); out.alt = explicitToday ? {date:today, time:t(h)} : {date: addDays(1), time: t(h)}; }
+        else { out.date = addDays(1); out.time = t(h); out.alt = {date: out.date, time: t(h+12)}; }
+      } else if (h >= 7){ out.time = t(h); out.alt = {date: out.date, time: t(h+12)}; }
+      else { out.time = t(h+12); out.alt = {date: out.date, time: t(h)}; }
+    } else out.time = t(h);
+  } else if (dayPart && rel === null){
+    out.time = DP_DEFAULT[dayPart];
+    if (dayPart !== "nacht" && !out.date && +out.time.slice(0,2)*60 < nowMin - 60) out.date = addDays(1);   // «am Morgen» abends gesagt = morgen früh
+  }
+  if (dayPart) out.says.push({frueh:"früh",morgen:"morgens",vormittag:"vormittags",mittag:"mittags",nachmittag:"nachmittags",abend:"abends",nacht:"nachts"}[dayPart]);
+
+  text = text.replace(rx("\\b(da|dort|zurück)\\s+sein\\b","giu")," sein ").replace(rx("\\b(ankunft|abfahrt|abfahren|losfahren|spätestens|spaetestens|uhr)\\b","giu")," ");
   out.rest = text.replace(/\s+/g," ").replace(/\s+([,.])/g,"$1").trim();
   return out;
 }
@@ -705,6 +956,62 @@ function whenTxt(w){
   const today = zurichParts(new Date()).date;
   const d = w.date === today ? "heute" : w.date.split("-").reverse().join(".");
   return (w.isArr ? "Ankunft " : "Abfahrt ") + d + " " + w.time;
+}
+
+/* ================= Orte, Linien, Filter ================= */
+// «Tram 4» / «4» / «Bus 31» / «S 3» → vergleichbarer Linienname
+const normLine = s => String(s||"").toUpperCase().replace(/^(TRAM|BUS|SCHIFF|STANDSEILBAHN|SEILBAHN|METRO|NFB|NFT|T|B)\s+/,"").replace(/\s+/g,"");
+const normName = s => String(s||"").toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/[^a-z0-9 ]/g," ").replace(/\s+/g," ").trim();
+// «Zürich, Tiefenbrunnen» passt zu «Tiefenbrunnen»
+function nameMatch(a, b){ a = normName(a); b = normName(b); return !!(a && b) && (a.includes(b) || b.includes(a.split(" ").slice(-1)[0])); }
+// Verkehrsmittel → Filter der Fahrplan-API (transportations[])
+const TRANSP = {train:["train"], s:["train"], tram:["tram"], bus:["bus"], ship:["ship"], cableway:["cableway"], funicular:["cableway"], metro:["train","tram"]};
+function transpOf(o){
+  const add = (set, gs) => (gs||[]).forEach(g => (TRANSP[g]||[]).forEach(x => set.add(x)));
+  if (o && o.only && o.only.length){ const s = new Set(); add(s, o.only); return [...s]; }
+  if (o && o.without && o.without.length){ const w = new Set(); add(w, o.without); const all = ["train","tram","bus","ship","cableway"].filter(x => !w.has(x)); return all.length ? all : null; }
+  return null;
+}
+const TAB_OF = {train:"train", s:"s", tram:"tram", bus:"bus"};
+const tabOfMode = m => (m ? (TAB_OF[m] || "other") : "all");
+// Haltestelle per Name oder Standort finden
+async function placeToStop(name){
+  if (!name || HERE_RE.test(name)){ const h = await getHere(); return {name:"deinem Standort", lat:h.lat, lon:h.lon, here:true}; }
+  if (name === "@MAIN") name = await mainStationNear(await getHere());
+  const r = await api("/locations", {query:name, type:"station"});
+  const s = (r.stations||[]).find(s => s.id && s.coordinate && s.coordinate.x != null);
+  if (!s) throw new Error(`Haltestelle «${name}» nicht gefunden.`);
+  return {name:s.name, id:s.id, lat:s.coordinate.x, lon:s.coordinate.y};
+}
+async function nearestStation(h){
+  const r = await api("/locations", {x:h.lat, y:h.lon, type:"station"});
+  const s = (r.stations||[]).find(s => s.id);
+  if (!s) throw new Error("In deiner Nähe finde ich keine Haltestelle.");
+  return s.name;
+}
+// «zum SBB», «an den Bahnhof»: Hauptbahnhof des Orts, in dem ref liegt (Standort oder Ortsname)
+const mainCache = new Map();
+async function mainStationNear(ref){
+  const r = typeof ref === "string" ? await api("/locations", {query:ref, type:"station"}) : await api("/locations", {x:ref.lat, y:ref.lon, type:"station"});
+  const sts = (r.stations||[]).filter(s => s.id);
+  if (!sts.length) throw new Error("Ich finde keinen Bahnhof in der Nähe.");
+  const withTown = sts.find(s => s.name.includes(","));          // «Basel, Barfüsserplatz» → Basel
+  const town = withTown ? withTown.name.split(",")[0].trim() : sts[0].name;
+  if (mainCache.has(town)) return mainCache.get(town);
+  const r2 = await api("/locations", {query:town, type:"station"});
+  const tr = (r2.stations||[]).find(s => s.id && s.icon === "train");
+  const name = tr ? tr.name : town;
+  mainCache.set(town, name);
+  return name;
+}
+function optsTxt(q){
+  const o = q.opts || {}, parts = [];
+  if (q.line) parts.push("Linie "+q.line);
+  if (o.only && o.only.length) parts.push("nur "+o.only.map(g=>MODE_TXT[g]).join(", "));
+  if (o.without && o.without.length) parts.push("ohne "+o.without.map(g=>MODE_TXT[g]).join(", "));
+  if (o.direct) parts.push("ohne Umsteigen");
+  if (o.via) parts.push("über "+o.via);
+  return parts.map(p => " · "+esc(p)).join("");
 }
 
 /* ================= Routenplanung A → B ================= */
@@ -752,11 +1059,18 @@ function buildRoute(c){
     rt: rides.some(r => typeof r.depDelay === "number")
   };
 }
-async function routeQuery(f, t, w){
-  const res = await api("/connections", {from:f, to:t, date:w.date, time:w.time, isArrivalTime:w.isArr?1:null, limit:5});
-  const list = (res.connections||[]).map(buildRoute).filter(Boolean);
-  if (!list.length) throw new Error("Keine Verbindung gefunden. Prüfe Start und Ziel (Haltestelle, Adresse oder «hier»).");
-  return {list, fromName: res.from && res.from.name, toName: res.to && res.to.name};
+async function routeQuery(f, t, w, o){
+  o = o || {};
+  const filtered = o.direct || o.line;
+  const res = await api("/connections", {from:f, to:t, date:w.date, time:w.time, isArrivalTime:w.isArr?1:null, limit:filtered?10:5,
+    "transportations[]": transpOf(o), "via[]": o.via || null});
+  let list = (res.connections||[]).map(buildRoute).filter(Boolean);
+  if (!list.length) throw new Error("Keine Verbindung gefunden. Prüfe Start und Ziel (Haltestelle, Adresse oder «hier»)"+(o.only||o.without&&o.without.length?" und die Verkehrsmittel":"")+".");
+  const notes = [];
+  // Die API kennt «direkt» nicht zuverlässig: selbst filtern
+  if (o.direct){ const d = list.filter(r => r.transfers === 0); if (d.length) list = d; else notes.push("Keine Verbindung ohne Umsteigen gefunden, gezeigt werden alle."); }
+  if (o.line){ const d = list.filter(r => r.legs.some(l => l.kind==="ride" && normLine(l.line) === normLine(o.line))); if (d.length) list = d; else notes.push("Keine Verbindung mit Linie "+o.line+" gefunden, gezeigt werden alle."); }
+  return {list: list.slice(0, 6), notes, fromName: res.from && res.from.name, toName: res.to && res.to.name};
 }
 async function enrichRoute(r){
   if (!r || r.enriched) return;
@@ -771,7 +1085,7 @@ async function pageRoute(dir){
   const w = {date:p.date, time:p.time, isArr: dir < 0};
   setStatus(dir > 0 ? "Lade spätere Verbindungen …" : "Lade frühere Verbindungen …");
   try{
-    const r = await routeQuery(route.f, route.t, w);
+    const r = await routeQuery(route.f, route.t, w, route.opts);
     route.list = r.list.sort((a,b)=>a.dep-b.dep); route.sel = 0; route.qWhen = w;
     setStatus(""); drawRouteMap(true); tickRoute(); enrichRoute(route.list[0]);
   }catch(e){ setStatus(e.message, true); }
@@ -890,6 +1204,7 @@ const map = L.map("map",{zoomControl:true}).setView([46.8,8.2],7);
 L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",{maxZoom:18,
   attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'}).addTo(map);
 let layer = L.layerGroup().addTo(map);
+const boardLayer = L.layerGroup().addTo(map);   // Haltestelle der Abfahrtstafel
 const trainMarkers = new Map(); let passedLine = null;
 
 /* ================= Zustand & Darstellung ================= */
@@ -911,18 +1226,20 @@ function drawRoutes(fit){
       passedLine = L.polyline([],{color:"#d06d2e",weight:6,opacity:1,lineCap:"butt",lineJoin:"miter"}).addTo(layer);
       t.stops.forEach((s,i)=>{
         L.marker([s.lat,s.lon],{icon:L.divIcon({className:"stopsq"+(i===0||i===t.stops.length-1?" end":"")+(s.cancelled?" cxl":""),iconSize:i===0||i===t.stops.length-1?[13,13]:[10,10]}),keyboard:false})
-          .bindTooltip(`<b>${esc(s.name)}</b><br>an ${fmt(s.arr)} · ab ${fmt(s.dep)}${s.platform?"<br>Gleis "+esc(s.platform):""}<br><i>Klick: Anschlüsse</i>`)
+          .bindTooltip(`<b>${esc(s.name)}</b><br>an ${fmt(s.arr)} · ab ${fmt(s.dep)}${s.platform?"<br>"+platTxt(s,t):""}<br><i>Klick: Anschlüsse</i>`)
           .on("click",()=>openOnward(t, i)).addTo(layer);
       });
     }
-    const cls = "train-icon"+(isSel?"":(state.extra.includes(t)?" extra":" other"));
-    const icon = L.divIcon({className:cls,html:"🚆",iconSize:[32,32],iconAnchor:[16,16]});
+    const g = t.group || "train", isTrain = g === "train";
+    const short = String(t.label||"").replace(/^(Tram|Bus|Schiff|Standseilbahn|Seilbahn|Metro)\s+/,"").replace(/\s+/g,"").slice(0,4);
+    const cls = "train-icon"+(isTrain ? (isSel?"":(state.extra.includes(t)?" extra":" other")) : " lbl g-"+coarse(g)+(isSel?" selv":""));
+    const icon = L.divIcon({className:cls,html:isTrain?"🚆":esc(short),iconSize:[32,32],iconAnchor:[16,16]});
     const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:isSel?1000:0,keyboard:true,title:t.label}).addTo(layer)
       .bindTooltip(esc(t.label),{permanent:isSel,direction:"top",offset:[0,-20],className:"trainlbl"})
       .on("click",()=>select(t.key));
     trainMarkers.set(t.key, mk);
   }
-  if (sel && fit !== false){
+  if (sel && fit !== false && !state.line){
     map.fitBounds(L.latLngBounds((sel.geom||sel.stops.map(s=>[s.lat,s.lon]))).pad(0.12));
   }
 }
@@ -964,7 +1281,9 @@ function renderCards(now){
   if (!state.q && !state.extra.length) return;
   let html = "";
   if (state.q && !state.trips.length){
-    html += `<div class="empty">Im Moment ist kein passender Zug ${state.q.type?("(<b>"+esc(state.q.type)+"</b>) "):""}zwischen <b>${esc(state.resolved?.from||state.q.from)}</b> und <b>${esc(state.resolved?.to||state.q.to)}</b> unterwegs.</div>`;
+    html += state.line
+      ? `<div class="empty">Im Moment ist kein Fahrzeug der Linie <b>${esc(state.q.line)}</b>${state.q.dir?" Richtung <b>"+esc(state.q.dir)+"</b>":""} im Umkreis von rund 9 km um <b>${esc(state.center.name)}</b> unterwegs.${state.q.dir && state.dests && state.dests.length ? " Im Moment fährt sie nach: <b>"+state.dests.map(esc).join("</b>, <b>")+"</b>." : ""} Für Abfahrten schreib z. B. «${esc(whatTxt(state.q))} ab ‹Haltestelle›».</div>`
+      : `<div class="empty">Im Moment ist keine passende Fahrt ${(state.q.type||state.q.line||state.q.mode)?("(<b>"+esc(whatTxt(state.q))+"</b>) "):""}zwischen <b>${esc(state.resolved?.from||state.q.from)}</b> und <b>${esc(state.resolved?.to||state.q.to)}</b> unterwegs. Es zählen nur Fahrten ohne Umsteigen.</div>`;
     if (state.nextDeps.length){
       html += `<div class="small" style="margin-top:8px">Nächste Abfahrten:</div><ul class="list">` +
         state.nextDeps.map(t=>`<li><b>${esc(t.label)}</b> ab ${fmt(t.start)} → an ${fmt(t.end)}</li>`).join("") + `</ul>`;
@@ -989,12 +1308,12 @@ function renderCards(now){
     const cap = [t.cap1&&("1. Kl. "+CAP[t.cap1]), t.cap2&&("2. Kl. "+CAP[t.cap2])].filter(Boolean).join(" · ");
     html += `<div class="card ${isSel?"sel":""}" data-key="${esc(t.key)}" tabindex="0">
       <div class="t"><span class="name">${esc(t.label)}${state.extra.includes(t)?'<span class="tag">Anschluss</span>':""}</span>${delayBadge(t,p)}</div>
-      <div class="sub">Richtung ${esc(t.dest)}${t.operator?" · "+esc(t.operator):""}${t.geom?" · Gleisverlauf":""}</div>
+      <div class="sub">Richtung ${esc(t.dest)}${t.operator?" · "+esc(t.operator):""}${t.geom?" · "+(["tram","bus"].includes(t.group)?"Linienverlauf":"Gleisverlauf"):""}</div>
       <div class="bar"><i style="width:${(p.progress*100).toFixed(1)}%"></i></div>
       <div class="sub">${where}</div>
       <dl class="kv">
-        ${next?`<dt>Nächster Halt</dt><dd>${esc(next.name)} · ${fmt(next.arr||next.dep)}${next.platform?" · "+platTxt(next):""}</dd>`:""}
-        <dt>Ankunft ${esc(last.name)}</dt><dd>${fmt(last.arr)}${remain>0?" (in "+minutesTxt(remain)+")":""}${last.platform?" · "+platTxt(last):""}</dd>
+        ${next?`<dt>Nächster Halt</dt><dd>${esc(next.name)} · ${fmt(next.arr||next.dep)}${next.platform?" · "+platTxt(next,t):""}</dd>`:""}
+        <dt>Ankunft ${esc(last.name)}</dt><dd>${fmt(last.arr)}${remain>0?" (in "+minutesTxt(remain)+")":""}${last.platform?" · "+platTxt(last,t):""}</dd>
         ${cap?`<dt>Auslastung</dt><dd>${esc(cap)}</dd>`:""}
       </dl>
       ${(t.alerts||[]).map(a=>`<div class="alert"><b>${esc(a.headerText||"Meldung")}</b>${a.descriptionText?esc(a.descriptionText).slice(0,400):""}</div>`).join("")}
@@ -1015,14 +1334,15 @@ function stopList(t,p){
     const sched = s.schedArr||s.schedDep, exp = s.arr||s.dep;
     const late = sched && exp && (exp-sched) >= 60000;
     return `<li class="${cls}" data-key="${esc(t.key)}" data-i="${i}" title="Anschlüsse ab ${esc(s.name)}"><span class="d"></span>
-      <span>${esc(s.name)}${s.platform?` <span class="small">· ${platTxt(s)}</span>`:""}${i===t.stops.length-1?'<span class="cx">Anschlüsse ›</span>':""}</span>
+      <span>${esc(s.name)}${s.platform?` <span class="small">· ${platTxt(s,t)}</span>`:""}${i===t.stops.length-1?'<span class="cx">Anschlüsse ›</span>':""}</span>
       <span class="tm">${late?`<s>${fmt(sched)}</s>`:""}${fmt(exp)}</span></li>`;
   }).join("") + `</ul><div class="hint">Tipp: Halt antippen, um die Anschlüsse (Zug, S-Bahn, Tram, Bus) zu sehen.</div>`;
 }
-function platTxt(s){
+function platTxt(s, t){
+  const w = t && ["tram","bus"].includes(t.group) ? "Kante" : "Gleis";
   return s.platformChanged
-    ? `<span class="platchg">Gleis ${esc(s.platform)}</span> <s class="small">statt ${esc(s.schedPlatform)}</s>`
-    : "Gleis "+esc(s.platform);
+    ? `<span class="platchg">${w} ${esc(s.platform)}</span> <s class="small">statt ${esc(s.schedPlatform)}</s>`
+    : w+" "+esc(s.platform);
 }
 function select(key){ state.sel = key; drawRoutes(); tick(); }
 function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
@@ -1043,15 +1363,19 @@ function renderOnward(){
   if (!onward){ box.innerHTML = ""; return; }
   const o = onward, deps = (o.data && o.data.deps) || [];
   const minT = Math.max(+o.at, Date.now()) - 60000;   // nur erreichbare Abfahrten
-  const reach = deps.filter(d => +d.exp >= minT);
+  let reach = deps.filter(d => +d.exp >= minT);
+  const filtered = !!(o.line || o.dir);
+  if (o.line) reach = reach.filter(d => normLine(d.line) === normLine(o.line));
+  if (o.dir) reach = reach.filter(d => nameMatch(d.to, o.dir));
   const counts = {}; GROUPS.forEach(([g])=>counts[g]=0); reach.forEach(d=>{counts[d.group]++; counts.all++;});
   const shown = reach.filter(d=>o.tab==="all"||d.group===o.tab).slice(0,30);
-  let h = `<div class="ow-head"><h2>Anschlüsse ab ${esc(o.stop.name)}</h2><button type="button" class="ow-close" id="owClose">Schliessen ✕</button></div>
+  let h = `<div class="ow-head"><h2>${o.board?"Abfahrten":"Anschlüsse"} ab ${esc(o.stop.name)}</h2><button type="button" class="ow-close" id="owClose">Schliessen ✕</button></div>
+    ${filtered?`<div class="small owf">Nur ${o.line?"Linie <b>"+esc(o.line)+"</b>":""}${o.line&&o.dir?", ":""}${o.dir?"Richtung <b>"+esc(o.dir)+"</b>":""} · <button type="button" class="lnk" id="owAll">alle zeigen</button></div>`:""}
     <div class="small">ab ${fmt(new Date(Math.max(o.at, Date.now())))}${o.data&&o.data.src==="od"?" · nur dieser Bahnhof (Tram-/Bushaltestellen in der Nähe nicht verfügbar)":" · inkl. Haltestellen im Umkreis von 400 m"}</div>
     <div class="tabs">${GROUPS.map(([g,l])=>`<button type="button" class="tab ${o.tab===g?"on":""}" data-g="${g}" ${g!=="all"&&!counts[g]?"disabled":""}>${l}${o.data?" "+counts[g]:""}</button>`).join("")}</div>`;
   if (o.loading) h += `<div class="empty">Lade Abfahrten …</div>`;
   else if (o.error) h += `<div class="status err">${esc(o.error)}</div>`;
-  else if (!shown.length) h += `<div class="empty">Keine Abfahrten in dieser Kategorie in der nächsten Zeit.</div>`;
+  else if (!shown.length) h += `<div class="empty">Keine passenden Abfahrten in der nächsten Zeit.${filtered?" Prüfe Linie und Richtung oder tippe «alle zeigen».":""}</div>`;
   else h += shown.map((d,k)=>{
     const late = d.sched && d.exp && (d.exp-d.sched) >= 60000;
     const bg = d.color && /^[0-9a-f]{6}$/i.test(d.color) ? `style="background:#${d.color}"` : "";
@@ -1064,7 +1388,8 @@ function renderOnward(){
     </div>`;
   }).join("") + `<div class="hint">Abfahrt antippen, um das Fahrzeug auf der Karte zu verfolgen.</div>`;
   box.innerHTML = h;
-  $("owClose").onclick = ()=>{ onward=null; renderOnward(); };
+  $("owClose").onclick = ()=>{ onward=null; renderOnward(); boardLayer.clearLayers(); };
+  if ($("owAll")) $("owAll").onclick = ()=>{ onward.line = null; onward.dir = null; renderOnward(); };
   box.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{ onward.tab=b.dataset.g; renderOnward(); });
   box.querySelectorAll(".dep").forEach(el=>{ const go=()=>follow(shown[+el.dataset.k]); el.onclick=go; el.onkeydown=e=>{ if(e.key==="Enter") go(); }; });
 }
@@ -1105,15 +1430,15 @@ async function refreshExtra(){
 const MODES = {
   route: {
     go: "Route suchen",
-    placeholder: "z. B. «Von hier nach Zürich HB» oder «Basel SBB nach Bern morgen um 8»",
-    status: "Schreib Start und Ziel, z. B. «von hier nach Zürich HB». Start und Ziel können Haltestellen, Adressen oder «hier» sein. Datum und Zeit leer = jetzt.",
-    examples: ["Von hier nach Zürich HB", "Zürich, Bahnhofstrasse 1 nach Luzern", "Basel SBB nach Bern morgen Ankunft 9 Uhr", "Ich bin in Thun und möchte nach Interlaken Ost"]
+    placeholder: "z. B. «Von hier zum SBB» oder «Morgen Nachmittag um fünf nach Luzern»",
+    status: "Schreib Start und Ziel, z. B. «von hier zum SBB» oder «mit dem Tram zum Bellevue». Start und Ziel können Haltestellen, Adressen oder «hier» sein. Zeiten auch als «nach acht», «halb neun», «morgen früh». Leer = jetzt.",
+    examples: ["Von hier zum SBB", "Morgen Nachmittag um fünf nach Luzern", "Mit dem Tram von Zürich, Central nach Zürich, Bellevue", "Basel SBB nach Bern morgen Ankunft 9 Uhr", "Ich bin in Thun und möchte nach Interlaken Ost"]
   },
   track: {
-    go: "Zug suchen",
-    placeholder: "z. B. «TGV von Paris Gare de Lyon nach Basel SBB»",
-    status: "Schreib Zugtyp und Strecke, z. B. «IC von Zürich HB nach Bern», optional mit Zugnummer. Angezeigt werden Züge, die jetzt unterwegs sind.",
-    examples: ["TGV von Paris Gare de Lyon nach Basel SBB", "ICE von Basel SBB nach Frankfurt (Main) Hbf", "IC von Zürich HB nach Bern", "EC von Zürich HB nach Milano Centrale"]
+    go: "Live suchen",
+    placeholder: "z. B. «Wo ist das Tram 4 in Zürich» oder «Bus 31 ab Hegibachplatz»",
+    status: "Schreib eine Linie, Abfahrten oder eine Strecke, z. B. «Wo ist das Tram 4 in Zürich», «Tram 8 Richtung Kleinhüningen», «wann kommt der 31er», «Abfahrten ab hier» oder «IC von Zürich HB nach Bern». Angezeigt wird, was jetzt unterwegs ist.",
+    examples: ["Wo ist das Tram 4 in Zürich", "Bus 31 ab Zürich, Hegibachplatz", "Abfahrten ab hier", "IC von Zürich HB nach Bern", "TGV von Paris Gare de Lyon nach Basel SBB"]
   }
 };
 let modePref = "route", abArr = false;
@@ -1164,7 +1489,7 @@ function clearResults(){
   stopTimers(); route.active = false;
   state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null};
   onward = null; renderOnward();
-  $("results").innerHTML = ""; $("parsed").innerHTML = ""; layer.clearLayers();
+  $("results").innerHTML = ""; $("parsed").innerHTML = ""; layer.clearLayers(); boardLayer.clearLayers();
   document.body.classList.remove("has-results");
 }
 function setMode(m, {keepResults=false}={}){
@@ -1179,47 +1504,63 @@ function setMode(m, {keepResults=false}={}){
   if (!keepResults || changed) setStatus(MODES[m].status);
 }
 
-async function run(text, {silent=false}={}){
+async function run(text, {silent=false, keepFields=false}={}){
   lastText = text;
+  if (!silent){ abCache = null; lineCache = null; }
   const w = parseWhen(text);
   const q = parseQuery(w.rest);
+  // Fragen nach Linie oder Abfahrten gehören in «Live», auch wenn «Route» gewählt ist
+  if (modePref === "route" && !q.to && (q.line || q.intent || q.stop || q.mode)){ setMode("track", {keepResults:true}); }
   if (modePref === "track") return runTrack(q, text, silent);          // immer live
-  if (!silent){ if (w.date) setDate(w.date); if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
+  if (!silent && !keepFields){ if (w.date) setDate(w.date); if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
   const tv = $("t").value.trim(), time = normTime(tv);
   if (tv && !time){ $("t").classList.add("bad"); setStatus("Zeit bitte als Stunden und Minuten eingeben, z. B. 8:15 oder 0815.", true); return; }
   if (time) $("t").value = time;
   const when = {date:$("d").value || null, time, isArr:abArr};
-  return runRoute(q, when, text, silent);
+  return runRoute(q, when, text, silent, keepFields ? null : w.alt);
 }
+const HOME_MSG = "«Heim» kennt die Seite noch nicht. Schreib die Adresse, z. B. «nach Bahnhofstrasse 1, Zürich».";
 
-async function runRoute(q, when, text, silent){
+async function runRoute(q, when, text, silent, alt){
   let from = q.from || "hier", to = q.to;
   if (!to){
-    setStatus("Ich habe das Ziel nicht erkannt. Schreib z. B. «von hier nach Zürich HB» oder «in Bern ankommen».", true);
+    setStatus("Ich habe das Ziel nicht erkannt. Schreib z. B. «von hier nach Zürich HB», «zum SBB» oder «in Bern ankommen».", true);
     return;
   }
+  if (from === "@HOME" || to === "@HOME"){ setStatus(HOME_MSG, true); return; }
   const fromHere = HERE_RE.test(from), toHere = HERE_RE.test(to);
-  $("parsed").innerHTML = `Route · von <b>${esc(fromHere?"deinem Standort":from)}</b> nach <b>${esc(toHere?"deinem Standort":to)}</b>`;
+  const lbl = x => HERE_RE.test(x) ? "deinem Standort" : x === "@MAIN" ? "Bahnhof" : x;
+  $("parsed").innerHTML = `Route · von <b>${esc(lbl(from))}</b> nach <b>${esc(lbl(to))}</b>${optsTxt(q)}`;
   if (!silent){ setStatus(fromHere||toHere ? "Ermittle deinen Standort …" : "Suche Verbindungen …"); $("go").disabled = true; onward = null; renderOnward(); }
   try{
     let here = route.here || null;
     if ((fromHere || toHere) && (!silent || !here)) here = await getHere();
     const co = h => h.lat.toFixed(5)+","+h.lon.toFixed(5);
-    const f = fromHere ? co(here) : from, t = toHere ? co(here) : to;
+    let f = fromHere ? co(here) : from, t = toHere ? co(here) : to;
+    if (silent && route.active && route.f && route.text === text){ f = route.f; t = route.t; }   // aufgelöste Bahnhöfe behalten
+    else {
+      if (f === "@MAIN" || t === "@MAIN") setStatus("Suche den Bahnhof …");
+      if (f === "@MAIN") f = await mainStationNear(toHere ? here : t);
+      if (t === "@MAIN") t = await mainStationNear(fromHere ? here : f);
+    }
     const nowP = zurichParts(new Date());
     const qWhen = silent && route.active && route.qWhen ? route.qWhen : {date: when.date || nowP.date, time: when.time || nowP.time, isArr: !!when.isArr};
     if (!silent) setStatus("Suche Verbindungen …");
-    const r = await routeQuery(f, t, qWhen);
+    const opts = Object.assign({}, q.opts, {line: q.line});
+    if (q.mode && !(q.opts.only||[]).length && !q.line) opts.only = [q.mode];      // «mit dem Tram», «Bus von … nach …»
+    const r = await routeQuery(f, t, qWhen, opts);
     const prevKey = silent && route.active && route.list[route.sel] ? route.list[route.sel].key : null;
     const list = r.list.sort((a,b)=>a.dep-b.dep);
     let sel = prevKey ? list.findIndex(x=>x.key===prevKey) : -1;
     if (sel < 0) sel = qWhen.isArr ? list.length-1 : 0;
-    route = {active:true, list, sel, f, t, here:(fromHere||toHere)?here:null, qWhen, fetchedAt:new Date(),
-             fromName: fromHere ? "deinem Standort"+(r.fromName?" ("+r.fromName+")":"") : (r.fromName||from),
-             toName: toHere ? "deinem Standort" : (r.toName||to)};
+    route = {active:true, list, sel, f, t, text, opts, here:(fromHere||toHere)?here:null, qWhen, fetchedAt:new Date(),
+             fromName: fromHere ? "deinem Standort"+(r.fromName?" ("+r.fromName+")":"") : (r.fromName||f),
+             toName: toHere ? "deinem Standort" : (r.toName||t)};
     state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null};
-    $("parsed").innerHTML = `Route · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(qWhen))}`;
-    setStatus(`${list.length} ${list.length===1?"Verbindung":"Verbindungen"} gefunden. Antippen zeigt die Details.`);
+    const altBtn = alt && alt.time ? ` <button type="button" class="altbtn" id="altBtn" title="Andere Lesart der Uhrzeit">oder ${esc(alt.date && alt.date !== qWhen.date ? dateLabel(alt.date)+" " : "")}${esc(alt.time)}?</button>` : "";
+    $("parsed").innerHTML = `Route · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(qWhen))}${altBtn}${optsTxt(q)}`;
+    if (altBtn) $("altBtn").onclick = () => { setDate(alt.date || ""); $("t").value = alt.time; run(lastText, {keepFields:true}); };
+    setStatus(`${list.length} ${list.length===1?"Verbindung":"Verbindungen"} gefunden. Antippen zeigt die Details.`+(r.notes.length?" "+r.notes.join(" "):""));
     drawRouteMap(!silent); tickRoute(); enrichRoute(list[sel]);
     document.body.classList.add("has-results");
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
@@ -1234,25 +1575,68 @@ async function runRoute(q, when, text, silent){
   }
 }
 
+/* ---------- Live: was soll verfolgt werden? ---------- */
+function trackKind(q){
+  if (q.to) return "ab";                                            // Fahrten zwischen A und B
+  if (q.line && q.intent !== "when" && q.intent !== "departures" && !(q.stop && q.intent !== "where")) return "line";   // ganze Linie
+  if (q.stop || q.mode || q.intent || q.line) return "board";       // Abfahrten an einer Haltestelle
+  return null;
+}
+function whatTxt(q){
+  if (q.line) return (q.mode && !["s","train"].includes(q.mode) ? MODE_TXT[q.mode]+" " : (q.mode ? "" : "Linie "))+q.line;
+  if (q.type) return q.type + (q.number ? " Nr. "+q.number : "");
+  if (q.number) return "Nr. "+q.number;
+  return q.mode ? MODE_TXT[q.mode] : "alle Fahrten";
+}
 async function runTrack(q, text, silent){
-  $("parsed").innerHTML = q.from && q.to
-    ? `Zug live · <b>${esc(q.type||"jeder Zug")}</b>${q.number?" Nr. <b>"+esc(q.number)+"</b>":""} · von <b>${esc(q.from)}</b> nach <b>${esc(q.to)}</b>`
-    : "";
-  if (!q.from || !q.to){
-    setStatus("Ich habe Start und Ziel nicht erkannt. Schreib z. B. «TGV von Paris Gare de Lyon nach Basel SBB». Für «hier» oder Adressen wechsle zu «Route».", true);
+  if (q.from === "@HOME" || q.to === "@HOME"){ setStatus(HOME_MSG, true); return; }
+  const kind = trackKind(q);
+  if (!kind){
+    $("parsed").innerHTML = "";
+    setStatus("Ich habe nicht erkannt, was ich verfolgen soll. Schreib z. B. «Wo ist das Tram 4 in Zürich», «Bus 31 ab Hegibachplatz», «Abfahrten ab hier» oder «IC von Zürich HB nach Bern».", true);
     return;
   }
-  if (!silent){ setStatus("Suche Züge …"); $("go").disabled = true; onward = null; renderOnward(); }
+  if (kind === "board") return runBoard(q, text, silent);
+  if (kind === "line") return runLine(q, text, silent);
+  return runAB(q, text, silent);
+}
+function startLiveTimers(){
+  stopTimers();
+  refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
+  tickTimer = setInterval(tick, TICK_MS);
+}
+
+// Fahrten, die jetzt zwischen A und B unterwegs sind (alle Verkehrsmittel)
+let abCache = null;   // {text, q}: aufgelöste Orte, damit die Aktualisierung nicht jedes Mal den Standort abfragt
+async function runAB(q, text, silent){
+  const lbl = x => HERE_RE.test(x||"hier") ? "deinem Standort" : x === "@MAIN" ? "Bahnhof" : x;
+  $("parsed").innerHTML = `Live · <b>${esc(whatTxt(q))}</b> · von <b>${esc(lbl(q.from))}</b> nach <b>${esc(lbl(q.to))}</b>`;
+  if (!silent){ setStatus("Suche Fahrten …"); $("go").disabled = true; onward = null; renderOnward(); boardLayer.clearLayers(); }
   try{
-    const r = await findRunning(q, new Date());
+    let rq;
+    if (abCache && abCache.text === text) rq = abCache.q;
+    else {
+      rq = Object.assign({}, q);
+      const from = q.from || "hier";
+      if (HERE_RE.test(from) || HERE_RE.test(q.to)){ if (!silent) setStatus("Ermittle deinen Standort …"); }
+      const here = (HERE_RE.test(from) || HERE_RE.test(q.to) || from === "@MAIN" && HERE_RE.test(q.to)) ? await getHere() : null;
+      rq.from = HERE_RE.test(from) ? await nearestStation(here) : from;
+      rq.to = HERE_RE.test(q.to) ? await nearestStation(here) : q.to;
+      if (rq.from === "@MAIN") rq.from = await mainStationNear(rq.to === "@MAIN" ? await getHere() : rq.to);
+      if (rq.to === "@MAIN") rq.to = await mainStationNear(rq.from);
+      abCache = {text, q: rq};
+    }
+    if (!silent) setStatus("Suche Fahrten …");
+    const r = await findRunning(rq, new Date());
     if (silent) await refreshExtra();
     const prevSel = state.sel;
     const keep = silent ? state.extra : [];
     route.active = false;
-    state = {q, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:new Date(), resolved:r.resolved};
+    state = {q:rq, trips:r.running, extra:keep, nextDeps:r.nextDeps, viaTransfer:r.viaTransfer, sel:null, fetchedAt:new Date(), resolved:r.resolved};
     state.sel = allTrips().some(t=>t.key===prevSel) ? prevSel : (r.running[0] && r.running[0].key);
+    $("parsed").innerHTML = `Live · <b>${esc(whatTxt(q))}</b> · von <b>${esc(r.resolved.from||rq.from)}</b> nach <b>${esc(r.resolved.to||rq.to)}</b>`;
     if (!silent || state.trips.length || state.extra.length)
-      setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Zug":"Züge"} unterwegs: ${r.resolved.from} → ${r.resolved.to}` : "");
+      setStatus(r.running.length ? `${r.running.length} ${r.running.length===1?"Fahrt":"Fahrten"} unterwegs: ${r.resolved.from} → ${r.resolved.to}` : "");
     drawRoutes(!silent); tick();
     document.body.classList.add("has-results");
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
@@ -1262,10 +1646,105 @@ async function runTrack(q, text, silent){
     if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
   }finally{ $("go").disabled = false; }
   stopTimers();
-  if (state.q){
-    refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
-    tickTimer = setInterval(tick, TICK_MS);
-  }
+  if (state.q) startLiveTimers();
+}
+
+// Alle Fahrzeuge einer Linie im Gebiet (Transitous: Fahrten im Kartenausschnitt)
+let lineCache = null;   // {text, center}
+async function runLine(q, text, silent){
+  const head = () => `Live · <b>${esc(whatTxt(q))}</b>${q.dir?" · Richtung <b>"+esc(q.dir)+"</b>":""}`;
+  $("parsed").innerHTML = head();
+  if (!silent){ setStatus("Suche die Linie …"); $("go").disabled = true; onward = null; renderOnward(); boardLayer.clearLayers(); }
+  try{
+    let center = lineCache && lineCache.text === text ? lineCache.center : null;
+    if (!center){
+      if (q.stop){ center = await placeToStop(q.stop); }
+      else if (q.dir){ try { center = await placeToStop(q.dir); } catch(e){} }
+      if (!center){
+        try { if (!silent) setStatus("Ermittle deinen Standort …"); const h = await getHere(); center = {lat:h.lat, lon:h.lon, name:"deinem Standort", here:true}; }
+        catch(e){
+          const c = map.getCenter();
+          if (map.getZoom() < 11) throw new Error("Wo soll ich die Linie suchen? Gib einen Ort an, z. B. «Tram 4 Richtung Tiefenbrunnen» oder «Bus 31 in Zürich», oder erlaube den Standort.");
+          center = {lat:c.lat, lon:c.lng, name:"Kartenausschnitt"};
+        }
+      }
+      lineCache = {text, center};
+    }
+    if (!silent) setStatus("Suche Fahrzeuge der Linie "+q.line+" …");
+    const now = new Date(), dLat = 0.08, dLon = 0.12;   // rund 9 km in jede Richtung
+    const segs = await txSafe(() => tx("/v6/map/trips", {zoom:15, precision:5,
+      min:(center.lat-dLat).toFixed(4)+","+(center.lon-dLon).toFixed(4), max:(center.lat+dLat).toFixed(4)+","+(center.lon+dLon).toFixed(4),
+      startTime:now.toISOString(), endTime:new Date(now.getTime()+60000).toISOString()}));
+    if (!segs){
+      // Transitous nicht erreichbar: Abfahrtstafel als Ersatz
+      if (!silent) setStatus("Live-Positionen der Linie sind gerade nicht verfügbar. Ich zeige die Abfahrten.");
+      return runBoard(Object.assign({}, q, {stop: center.here ? "hier" : center.name, intent:"departures"}), text, silent);
+    }
+    const want = normLine(q.line), ids = new Map();
+    for (const sg of segs){
+      for (const t of (sg.trips||[])){
+        if (normLine(t.displayName || t.routeShortName) !== want || !modeOk(fineTx(sg.mode, t.displayName), q.mode)) continue;
+        const d = distM([center.lat, center.lon], [sg.from.lat, sg.from.lon]);
+        if (!ids.has(t.tripId) || ids.get(t.tripId) > d) ids.set(t.tripId, d);
+      }
+    }
+    const pick = [...ids.entries()].sort((a,b)=>a[1]-b[1]).slice(0, 14).map(x=>x[0]);
+    let trips = (await Promise.all(pick.map(id => txSafe(() => loadTxTrip(id))))).filter(t => t && t.stops.length > 1);
+    const dests = [...new Set(trips.map(t => t.dest).filter(Boolean))];
+    if (q.dir) trips = trips.filter(t => { const p = positionAt(t, now); const rest = t.stops.slice(p ? p.idx : 0);
+      return nameMatch(t.dest, q.dir) || rest.some(s => nameMatch(s.name, q.dir)); });
+    trips.sort((a,b) => (a.dest||"").localeCompare(b.dest||"") || a.start - b.start);
+    const prevSel = state.sel, keep = silent ? state.extra : [];
+    route.active = false;
+    state = {q, line:true, center, trips, dests, extra:keep, nextDeps:[], sel:null, fetchedAt:new Date(), resolved:{from:center.name}};
+    state.sel = allTrips().some(t=>t.key===prevSel) ? prevSel : (trips[0] && trips[0].key);
+    $("parsed").innerHTML = head() + ` · um <b>${esc(center.name)}</b>`;
+    setStatus(trips.length ? `${trips.length} ${trips.length===1?"Fahrzeug":"Fahrzeuge"} der Linie ${q.line} unterwegs. Antippen zeigt Halte und Verspätung.` : "");
+    drawRoutes(false); tick();
+    if (!silent){
+      const pts = trips.map(t => { const p = positionAt(t, now); return p ? [p.lat, p.lon] : null; }).filter(Boolean);
+      if (pts.length) map.fitBounds(L.latLngBounds(pts.concat([[center.lat, center.lon]])).pad(0.25), {maxZoom:15});
+      else map.setView([center.lat, center.lon], 14);
+    }
+    document.body.classList.add("has-results");
+    if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
+    saveUrl(text, null);
+  }catch(e){
+    if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
+  }finally{ $("go").disabled = false; }
+  stopTimers();
+  if (state.q) startLiveTimers();
+}
+
+// Abfahrten an einer Haltestelle oder am Standort, optional nach Linie/Richtung/Verkehrsmittel gefiltert
+async function runBoard(q, text, silent){
+  const filt = `${q.line?" · Linie <b>"+esc(q.line)+"</b>":(q.mode?" · <b>"+esc(MODE_TXT[q.mode])+"</b>":"")}${q.dir?" · Richtung <b>"+esc(q.dir)+"</b>":""}`;
+  if (!silent){ setStatus(q.stop && !HERE_RE.test(q.stop) ? "Suche die Haltestelle …" : "Ermittle deinen Standort …"); $("go").disabled = true; }
+  try{
+    const reuse = silent && onward && onward.board && onward.text === text;
+    const stop = reuse ? onward.stop : await placeToStop(q.stop || "hier");
+    if (!silent){ clearResults(); }
+    route.active = false;
+    if (!reuse) onward = {board:true, text, stop, at:new Date(), tab:tabOfMode(q.mode), line:q.line, dir:q.dir, loading:true, data:null, error:null};
+    $("parsed").innerHTML = `Live · Abfahrten ab <b>${esc(stop.name)}</b>${filt}`;
+    renderOnward();
+    if (!silent) setStatus("Lade Abfahrten …");
+    const data = await loadOnward(stop, new Date());
+    if (!onward || onward.text !== text) return;              // inzwischen etwas anderes gesucht
+    onward.at = new Date(); onward.data = data; onward.loading = false; onward.error = null;
+    renderOnward();
+    if (!silent) setStatus("");
+    boardLayer.clearLayers();
+    L.marker([stop.lat, stop.lon], {icon:L.divIcon({className: stop.here ? "youmk" : "stopsq end", iconSize: stop.here ? [14,14] : [14,14]})})
+      .bindTooltip(stop.here ? "Dein Standort" : esc(stop.name)).addTo(boardLayer);
+    if (!silent){ map.setView([stop.lat, stop.lon], 16); if (window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"}); }
+    if (silent && state.extra.length){ await refreshExtra(); drawRoutes(false); tick(); }
+    document.body.classList.add("has-results");
+    saveUrl(text, null);
+  }catch(e){
+    if (!silent){ setStatus(e.message || "Unbekannter Fehler.", true); if (onward && onward.board){ onward = null; renderOnward(); } }
+  }finally{ $("go").disabled = false; }
+  if (!silent || !refreshTimer) startLiveTimers();
 }
 function saveUrl(text, when){
   const u = new URLSearchParams(); u.set("m", modePref); u.set("q", text);
@@ -1289,7 +1768,7 @@ if (m0 === "route"){ if (P0.get("d")) setDate(P0.get("d")); if (P0.get("t")) $("
 const initial = P0.get("q");
 if (initial){ $("q").value = initial; run(initial); }
 
-window.__zt = {parseQuery, parseWhen, zurichToDate, buildRoute, positionAt, buildTrip, decodePolyline, txTrip, mergeTx, attachGeometry};
+window.__zt = {parseQuery, parseWhen, zurichToDate, buildRoute, positionAt, buildTrip, decodePolyline, txTrip, mergeTx, attachGeometry, normLine, nameMatch, transpOf, trackKind, mainStationNear};
 </script>
 </body>
 </html>
