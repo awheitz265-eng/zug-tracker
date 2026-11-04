@@ -84,6 +84,7 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible,.stops li:focus-visi
 .card.sel{border-color:var(--cobalt-deep);box-shadow:inset 6px 0 0 var(--copper),inset 0 1px 0 var(--hi),0 5px 14px var(--lo)}
 .card .t{display:flex;justify-content:space-between;align-items:center;gap:8px}
 .card .name{font-family:var(--label-font);font-weight:800;font-size:21px;letter-spacing:.04em;color:var(--name);text-transform:uppercase;line-height:1.1}
+.card button.name{background:transparent;padding:0;text-align:left}
 .tag{font-family:var(--label-font);font-size:12px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#fff;background:var(--chrome-cobalt);padding:1px 6px;margin-left:8px;vertical-align:middle}
 .badge{font-family:var(--label-font);font-size:13px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:2px 7px;white-space:nowrap;border:1px solid currentColor}
 .badge.ok{color:var(--ok);background:rgba(11,110,79,.1)}
@@ -243,7 +244,7 @@ button:focus-visible,.card:focus-visible,.dep:focus-visible,.stops li:focus-visi
     </form>
     <div class="content">
       <div class="parsed" id="parsed"></div>
-      <div class="status" id="status"></div>
+      <div class="status" id="status" role="status" aria-live="polite" aria-atomic="true"></div>
       <div id="results"></div>
       <div id="onward"></div>
     </div>
@@ -507,13 +508,13 @@ function buildTrip(j, firstFallback){
              schedArr, schedDep, arr, dep, delay: rt ? p.delay : (lastDelay ?? null),
              platform: prog.platform || p.platform, schedPlatform: p.platform,
              platformChanged: !!(prog.platform && p.platform && prog.platform !== p.platform),
-             cap1: prog.capacity1st, cap2: prog.capacity2nd, cancelled:false };
+             cap1: prog.capacity1st, cap2: prog.capacity2nd, cancelled:!!p.cancelled };
   }).filter(s => typeof s.lat === "number" && typeof s.lon === "number");
   const first = stops[0], last = stops[stops.length-1];
   return {
     key: "od|"+(j.name||"")+"|"+(first && first.schedDep ? first.schedDep.toISOString() : ""),
     src:"od", category: j.category||"", number: j.number||"", name: j.name||"", group: fineOd(j.category),
-    label: odLabel(j), operator: j.operator||"", dest: j.to||"", stops, realtime,
+    label: odLabel(j), operator: j.operator||"", dest: j.to||"", stops, realtime, cancelled:!!j.cancelled,
     cap1: j.capacity1st, cap2: j.capacity2nd, alerts:[],
     start: first && (first.dep||first.schedDep), end: last && (last.arr||last.schedArr)
   };
@@ -533,12 +534,19 @@ function txPlaceToStop(p){
 function txTrip(itin){
   const legs = (itin.legs||[]).filter(l => l.legGeometry || l.intermediateStops);
   if (!legs.length) return null;
-  const stops = []; let pts = []; const alerts = []; let realtime = false, cancelled = false;
+  const stops = []; let pts = []; const alerts = [], sections = []; let realtime = false, cancelled = false;
   for (const l of legs){
     const ps = [l.from, ...(l.intermediateStops||[]), l.to].map(txPlaceToStop);
     if (stops.length && ps.length && distM([stops[stops.length-1].lat,stops[stops.length-1].lon],[ps[0].lat,ps[0].lon]) < 300){
       const prev = stops.pop(); ps[0].arr = prev.arr; ps[0].schedArr = prev.schedArr;
     }
+    const group = fineTx(l.mode, l.displayName || l.routeShortName);
+    let label = l.displayName || l.routeShortName || l.tripShortName || "Fahrt";
+    const prefix = {tram:"Tram", bus:"Bus", ship:"Schiff", funicular:"Standseilbahn", cableway:"Seilbahn", metro:"Metro"}[group];
+    if (prefix && /^[A-Z]{0,2}\d{1,3}[A-Z]?$/i.test(label)) label = prefix+" "+label;
+    sections.push({label, group, dest:(l.tripTo&&l.tripTo.name)||l.headsign||l.to.name||"",
+      start:ps[0].dep||ps[0].arr, end:ps[ps.length-1].arr||ps[ps.length-1].dep,
+      fromIndex:stops.length, toIndex:stops.length+ps.length-1, cancelled:!!l.cancelled});
     stops.push(...ps);
     if (l.legGeometry && l.legGeometry.points) pts = pts.concat(decodePolyline(l.legGeometry.points, l.legGeometry.precision));
     (l.alerts||[]).forEach(a=>alerts.push(a)); realtime = realtime || !!l.realTime; cancelled = cancelled || !!l.cancelled;
@@ -550,10 +558,16 @@ function txTrip(itin){
   const PFX = {tram:"Tram", bus:"Bus", ship:"Schiff", funicular:"Standseilbahn", cableway:"Seilbahn", metro:"Metro"};
   if (/^[A-Z]{0,2}\d{1,3}[A-Z]?$/i.test(label) && PFX[group]) label = PFX[group]+" "+label;
   const t = { key:"tx|"+L.tripId, src:"tx", tripId:L.tripId, group, category: String(label).split(" ")[0], number:L.tripShortName||"", name:L.tripShortName||"",
-    label, operator:(L.agencyName||"").replace(/\s+INFO\+$/,""), dest:(L.tripTo&&L.tripTo.name)||L.headsign||"", stops, realtime, cancelled,
+    label, sections, operator:(L.agencyName||"").replace(/\s+INFO\+$/,""), dest:(L.tripTo&&L.tripTo.name)||L.headsign||"", stops, realtime, cancelled,
     alerts: uniqAlerts(alerts), start:first.dep||first.schedDep, end:last.arr||last.schedArr };
   attachGeometry(t, pts);
   return t;
+}
+function tripIdentity(t, now = new Date()){
+  const sections = t.sections || [];
+  // At a shared boundary the departing section takes precedence.
+  return [...sections].reverse().find(s => s.start && +s.start <= +now && (!s.end || +now <= +s.end))
+    || sections.find(s => s.start && +s.start > +now) || sections[sections.length-1] || t;
 }
 function uniqAlerts(list){
   const seen = new Set(); const out = [];
@@ -609,10 +623,18 @@ function progressFrac(trip,t){
 
 /* ================= Datenquellen ================= */
 async function getJSON(url, label){
-  const r = await fetch(url);
+  const controller = new AbortController();
+  const timer = setTimeout(()=>controller.abort(), 15000);
+  try {
+  const r = await fetch(url, {signal:controller.signal});
   if (r.status === 429) throw new Error(label+" bremst gerade (zu viele Anfragen). Bitte kurz warten.");
   if (!r.ok) throw new Error(label+" antwortet mit Fehler "+r.status+".");
-  return r.json();
+  return await r.json();
+  } catch(e){
+    if (e.name === "AbortError") throw new Error(label+" antwortet nicht rechtzeitig. Bitte erneut versuchen.");
+    if (e instanceof TypeError) throw new Error(label+" ist nicht erreichbar. Bitte Internetverbindung prüfen.");
+    throw e;
+  } finally { clearTimeout(timer); }
 }
 function api(path, params){
   const u = new URL(API + path);
@@ -663,6 +685,7 @@ async function loadTxTrip(tripId){
   if (c && Date.now()-c.at < REFRESH_MS-5000) return c.trip;
   const itin = await tx("/v6/trip", {tripId});
   const t = txTrip(itin);
+  if (t) t.tripId = tripId;
   txTripCache.set(tripId, {at:Date.now(), trip:t});
   return t;
 }
@@ -758,7 +781,7 @@ function groupOfTx(st){
 }
 function groupOfOd(e){ return coarse(fineOd(e.category)); }
 async function loadOnward(stop, at){
-  const time = new Date(Math.max(at ? at.getTime() : Date.now(), Date.now()) - 60000);
+  const time = new Date(Math.max(at ? at.getTime() : Date.now(), Date.now()));
   const r = await txSafe(()=>tx("/v6/stoptimes", {center:stop.lat+","+stop.lon, radius:400, time:time.toISOString(), n:60, window:5400}));
   if (r && r.stopTimes){
     const deps = r.stopTimes.filter(st=>st.place).map(st=>{
@@ -787,7 +810,7 @@ async function loadOnward(stop, at){
     const pp = e.stop.prognosis&&e.stop.prognosis.platform;
     return { group:groupOfOd(e), line: odLabel(e), to:e.to||"", stopName:e.stop.station&&e.stop.station.name, sched, exp,
       rt: typeof e.stop.delay==="number", delay: e.stop.delay, platform: pp||e.stop.platform||"", platformChanged: !!(pp&&e.stop.platform&&pp!==e.stop.platform), schedPlatform:e.stop.platform,
-      cancelled:false, od:e };
+      cancelled:!!(e.cancelled || e.stop.cancelled), dist:0, od:e };
   }).filter(d=>d.sched)};
 }
 
@@ -817,6 +840,11 @@ const END = "(?=[\\s,;!?]|\\.(?:\\s|$)|$)";
 
 // Liest Datum, Zeit und Ab/An aus dem Satz und gibt den Rest (Orte, Linie) zurück.
 // now: Bezugszeit (für Tests einstellbar)
+function validDate(value){
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value || "")) return false;
+  const d = new Date(value+"T12:00:00Z");
+  return Number.isFinite(+d) && d.toISOString().slice(0,10) === value;
+}
 function parseWhen(raw, now){
   now = now || new Date();
   let text = " "+raw.replace(/[«»"“”„?!]/g," ").replace(/\s+/g," ")+" ";
@@ -852,7 +880,7 @@ function parseWhen(raw, now){
     const d = m[1].toLowerCase(); out.date = d==="heute" ? today : addDays(d==="morgen" ? 1 : 2);
     explicitToday = d==="heute"; dayPart = DAYPART[m[2].toLowerCase()]; cut(m);
   }
-  if ((m = find("\\bmitternacht\\b"))) { clock = {h:24, mi:0, fixed:true}; cut(m); }
+  if ((m = find("\\b(?:(?:um|gegen|zu)\\s+)?mitternacht\\b"))) { clock = {h:24, mi:0, fixed:true}; cut(m); }
   if (!dayPart && (m = find("\\b(?:am|gegen|in der|zur|um die)\\s+(früh|frueh|morgen|vormittag|mittag|nachmittag|abend|nacht)\\b"))) { dayPart = DAYPART[m[1].toLowerCase()]; cut(m); }
   if (!dayPart && (m = find("\\b(morgens|vormittags|mittags|nachmittags|abends|nachts|früh|frueh)\\b"))) { dayPart = DAYPART[m[1].toLowerCase()]; cut(m); }
   if (!out.date){
@@ -882,12 +910,14 @@ function parseWhen(raw, now){
     const y0 = +today.slice(0,4); const y = m[3] ? (m[3].length===2 ? 2000 + +m[3] : +m[3]) : y0;
     let ds = y+"-"+pad(m[2])+"-"+pad(m[1]);
     if (!m[3] && ds < today) ds = (y+1)+"-"+pad(m[2])+"-"+pad(m[1]);
-    if (+m[2] >= 1 && +m[2] <= 12 && +m[1] >= 1 && +m[1] <= 31){ out.date = ds; cut(m); }
+    if (!validDate(ds)) throw new Error("Dieses Datum gibt es nicht. Bitte Tag, Monat und Jahr prüfen.");
+    out.date = ds; cut(m);
   } else if ((m = find("\\b(?:am\\s+)?(\\d{1,2})\\.?\\s+("+altOf(MONTHS)+")\\.?\\b(?:\\s+(\\d{4}))?"))) {
     const mo = MONTHS[m[2].toLowerCase()], y0 = +today.slice(0,4);
     let ds = (m[3]||y0)+"-"+pad(mo)+"-"+pad(m[1]);
     if (!m[3] && ds < today) ds = (y0+1)+"-"+pad(mo)+"-"+pad(m[1]);
-    if (+m[1] >= 1 && +m[1] <= 31){ out.date = ds; cut(m); }
+    if (!validDate(ds)) throw new Error("Dieses Datum gibt es nicht. Bitte Tag, Monat und Jahr prüfen.");
+    out.date = ds; cut(m);
   }
 
   // Uhrzeit (erste passende Form gewinnt)
@@ -927,7 +957,7 @@ function parseWhen(raw, now){
   // Tageszeit anwenden, Mehrdeutigkeit (8 = 08:00 oder 20:00?) auflösen
   if (clock){
     let {h, mi} = clock;
-    if (h === 24){ h = 0; if (!out.date) out.date = addDays(1); }
+    if (h === 24){ if (mi !== 0) throw new Error("24 Uhr ist nur als 24:00 gültig. Bitte z. B. morgen um 00:30 schreiben."); h = 0; if (!out.date) out.date = addDays(1); }
     const t = x => pad(x)+":"+pad(mi);
     if (dayPart){
       if ((dayPart === "nachmittag" || dayPart === "abend") && h < 12) h += 12;
@@ -951,6 +981,8 @@ function parseWhen(raw, now){
   if (dayPart) out.says.push({frueh:"früh",morgen:"morgens",vormittag:"vormittags",mittag:"mittags",nachmittag:"nachmittags",abend:"abends",nacht:"nachts"}[dayPart]);
 
   text = text.replace(rx("\\b(da|dort|zurück)\\s+sein\\b","giu")," sein ").replace(rx("\\b(ankunft|abfahrt|abfahren|losfahren|spätestens|spaetestens|uhr)\\b","giu")," ");
+  if (out.date && !validDate(out.date)) throw new Error("Dieses Datum gibt es nicht. Bitte Tag, Monat und Jahr prüfen.");
+  if (/\b\d{1,2}[:h]\d{2}\b/i.test(text)) throw new Error("Diese Uhrzeit ist ungültig. Bitte eine Zeit zwischen 00:00 und 23:59 eingeben.");
   out.rest = text.replace(/\s+/g," ").replace(/\s+([,.])/g,"$1").trim();
   return out;
 }
@@ -1207,7 +1239,7 @@ async function routeQuery(f, t, w, o){
     }
     if (d.length) list = d; else { list = list.slice(0, 5); notes.push("Keine Verbindung mit Linie "+o.line+" gefunden, gezeigt werden alle."); }
   }
-  return {list: list.slice(0, 6), notes, fromName: res.from && res.from.name, toName: res.to && res.to.name};
+  return {list: list.slice(0, 6), notes, fromName: list[0]?.legs[0]?.from.name || res.from?.name, toName: list[0]?.legs[list[0].legs.length-1]?.to.name || res.to?.name};
 }
 async function enrichRoute(r){
   if (!r || r.enriched) return;
@@ -1216,6 +1248,9 @@ async function enrichRoute(r){
   if (route.active && route.list[route.sel] === r){ drawRouteMap(false); tickRoute(); }
 }
 async function pageRoute(dir){
+  if (!route.active || searchBusy) return;
+  searchBusy=true; stopTimers();
+  const generation=++searchGeneration;
   const L0 = route.list[0], L1 = route.list[route.list.length-1];
   const base = dir > 0 ? new Date(L1.dep.getTime()+60000) : new Date(L0.arr.getTime()-60000);
   const p = zurichParts(base);
@@ -1223,9 +1258,14 @@ async function pageRoute(dir){
   setStatus(dir > 0 ? "Lade spätere Verbindungen …" : "Lade frühere Verbindungen …");
   try{
     const r = await routeQuery(route.f, route.t, w, route.opts);
-    route.list = r.list.sort((a,b)=>a.dep-b.dep); route.sel = 0; route.qWhen = w;
-    setStatus(""); drawRouteMap(true); tickRoute(); enrichRoute(route.list[0]);
-  }catch(e){ setStatus(e.message, true); }
+    if (generation !== searchGeneration) return;
+    route.list = r.list.sort((a,b)=>a.dep-b.dep); route.sel = dir < 0 ? route.list.length-1 : 0; route.qWhen = w;
+    route.alt = null; route.fetchedAt = new Date();
+    setDate(w.date); $("t").value = w.time; setAb(w.isArr);
+    renderRouteHeader(); saveUrl(route.text, w);
+    setStatus(""); drawRouteMap(true); tickRoute(); enrichRoute(route.list[route.sel]);
+  }catch(e){ if(generation === searchGeneration) setStatus(e.message, true); }
+  finally { if(generation === searchGeneration){ searchBusy=false; startLiveTimers(); } }
 }
 function selectRoute(i){ route.sel = i; drawRouteMap(true); tickRoute(); enrichRoute(route.list[i]); }
 
@@ -1288,16 +1328,25 @@ function plat(p, chg, sched, word){
   if (!p) return "";
   return chg ? ` · <span class="platchg">${word} ${esc(p)}</span> <s class="small">statt ${esc(sched)}</s>` : ` · ${word} ${esc(p)}`;
 }
+function platformWord(group){ return group === "ship" ? "Steg" : ["tram","bus"].includes(group) ? "Kante" : ["cableway","funicular"].includes(group) ? "Station" : "Gleis"; }
+function fullTime(d){ return d ? zurichParts(d).date.split("-").reverse().join(".")+" "+fmt(d) : "–"; }
+function routeCancelled(r){ return r.legs.some(l => l.kind === "ride" && (l.trip.cancelled || l.trip.stops.some(s=>s.cancelled))); }
+function routeBadge(r){
+  if (routeCancelled(r)) return `<span class="badge bad">${r.legs.some(l=>l.kind==="ride" && l.trip.cancelled) ? "Fahrt" : "Halt"} fällt aus</span>`;
+  return !r.rt ? '<span class="badge na">Fahrplan</span>' : r.maxDelay > 0 ? `<span class="badge late">bis +${r.maxDelay} Min.</span>` : '<span class="badge ok">pünktlich</span>';
+}
 function renderRoutes(now){
   const box = $("results"); if (!route.active) return;
-  const word = l => /^(T|TRAM|B|BUS|NFB|NFT)$/i.test(l.trip.category) ? "Kante" : "Gleis";
+  const word = l => platformWord(fineOd(l.trip.category));
   let h = `<div class="pager"><button type="button" data-pg="-1">‹ Früher</button><button type="button" data-pg="1">Später ›</button></div>`;
   route.list.forEach((r, i) => {
     const sel = i === route.sel;
-    const badge = !r.rt ? `<span class="badge na">Fahrplan</span>` : (r.maxDelay > 0 ? `<span class="badge late">bis +${r.maxDelay} Min.</span>` : `<span class="badge ok">pünktlich</span>`);
+    const badge = routeBadge(r);
     const chain = r.legs.map(l => l.kind==="walk" ? `<span class="wk">Fuss ${l.min}′</span>` : `<span class="line g-${l.group}">${esc(l.line)}</span>`).join(`<span class="ar">›</span>`);
-    h += `<div class="card rt ${sel?"sel":""}" data-i="${i}" tabindex="0">
-      <div class="t"><span class="name">${fmt(r.dep)} → ${fmt(r.arr)}</span>${badge}</div>
+    h += `<div class="card rt ${sel?"sel":""}" data-i="${i}" data-focus-key="route-${esc(r.key)}" role="group" aria-label="Verbindung ${fmt(r.dep)} nach ${fmt(r.arr)}" tabindex="0">
+      <div class="t"><button type="button" class="name" data-focus-key="choose-route-${esc(r.key)}" aria-expanded="${sel}" aria-label="Verbindung ${fmt(r.dep)} nach ${fmt(r.arr)} anzeigen">${fmt(r.dep)} → ${fmt(r.arr)}</button>${badge}</div>
+      <div class="small">${esc(zurichParts(r.dep).date.split("-").reverse().join("."))}${zurichParts(r.arr).date !== zurichParts(r.dep).date ? " → "+esc(zurichParts(r.arr).date.split("-").reverse().join(".")) : ""}</div>
+      ${routeCancelled(r)?'<div class="alert">Mindestens ein Fahrtabschnitt oder Halt fällt aus. Bitte eine andere Verbindung wählen.</div>':""}
       <div class="sub">${minutesTxt(r.durMin)} · ${r.transfers===0?"direkt":r.transfers+" Umstieg"+(r.transfers>1?"e":"")}${r.walkMin?" · "+r.walkMin+" Min. zu Fuss":""}</div>
       <div class="chain">${chain}</div>`;
     if (sel){
@@ -1330,8 +1379,8 @@ function renderRoutes(now){
     h += `</div>`;
   });
   const fa = route.fetchedAt ? `Daten von ${fmt(route.fetchedAt)}, automatische Aktualisierung jede Minute.` : "";
-  box.innerHTML = h + `<div class="small">${fa}</div>`;
-  box.querySelectorAll(".card.rt").forEach(el => { el.onclick = () => { if (+el.dataset.i !== route.sel) selectRoute(+el.dataset.i); }; el.onkeydown = e => { if (e.key==="Enter") selectRoute(+el.dataset.i); }; });
+  replaceContent(box, h + `<div class="small">${fa}</div>`);
+  box.querySelectorAll(".card.rt").forEach(el => { el.onclick = () => { if (+el.dataset.i !== route.sel) selectRoute(+el.dataset.i); }; el.onkeydown = e => activateKey(e, ()=>selectRoute(+el.dataset.i)); });
   box.querySelectorAll("[data-pg]").forEach(b => b.onclick = () => pageRoute(+b.dataset.pg));
   box.querySelectorAll("[data-onw]").forEach(b => b.onclick = e => { e.stopPropagation(); const l = route.list[route.sel].legs[+b.dataset.onw]; openOnward(l.trip, l.trip.stops.length-1); });
 }
@@ -1367,13 +1416,15 @@ function drawRoutes(fit){
           .on("click",()=>openOnward(t, i)).addTo(layer);
       });
     }
-    const g = t.group || "train", isTrain = g === "train";
-    const short = String(t.label||"").replace(/^(Tram|Bus|Schiff|Standseilbahn|Seilbahn|Metro)\s+/,"").replace(/\s+/g,"").slice(0,4);
+    const identity = tripIdentity(t);
+    const g = identity.group || "train", isTrain = g === "train";
+    const short = String(identity.label||"").replace(/^(Tram|Bus|Schiff|Standseilbahn|Seilbahn|Metro)\s+/,"").replace(/\s+/g,"").slice(0,4);
     const cls = "train-icon"+(isTrain ? (isSel?"":(state.extra.includes(t)?" extra":" other")) : " lbl g-"+coarse(g)+(isSel?" selv":""));
     const icon = L.divIcon({className:cls,html:isTrain?"🚆":esc(short),iconSize:[32,32],iconAnchor:[16,16]});
-    const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:isSel?1000:0,keyboard:true,title:t.label}).addTo(layer)
-      .bindTooltip(esc(t.label),{permanent:isSel,direction:"top",offset:[0,-20],className:"trainlbl"})
+    const mk = L.marker([t.stops[0].lat,t.stops[0].lon],{icon,zIndexOffset:isSel?1000:0,keyboard:true,title:identity.label}).addTo(layer)
+      .bindTooltip(esc(identity.label),{permanent:isSel,direction:"top",offset:[0,-20],className:"trainlbl"})
       .on("click",()=>select(t.key));
+    mk.identityLabel = identity.label;
     trainMarkers.set(t.key, mk);
   }
   if (sel && fit !== false && !state.line){
@@ -1383,7 +1434,15 @@ function drawRoutes(fit){
 
 function tick(){
   if (route.active) return tickRoute();
-  const now = refNow(); const sel = selTrip();
+  const now = refNow();
+  if (state.line && state.q){
+    const count = state.trips.length;
+    state.trips = state.trips.filter(t => normLine(tripIdentity(t, now).label) === normLine(state.q.line) && +t.end >= +now);
+    if (!allTrips().some(t=>t.key===state.sel)) state.sel = state.trips[0]?.key || null;
+    if (count !== state.trips.length) setStatus(`${state.trips.length} Fahrzeuge der Linie ${state.q.line} unterwegs. Antippen zeigt Halte und Verspätung.`);
+  }
+  if (trainMarkers.size !== allTrips().length || allTrips().some(t=>trainMarkers.get(t.key)?.identityLabel !== tripIdentity(t, now).label)) drawRoutes(false);
+  const sel = selTrip();
   for (const t of allTrips()){
     const p = positionAt(t, now); const mk = trainMarkers.get(t.key);
     if (p && mk) mk.setLatLng([p.lat,p.lon]);
@@ -1434,6 +1493,7 @@ function renderCards(now){
   for (const t of allTrips()){
     const p = positionAt(t, now); if (!p) continue;
     const isSel = t === sel;
+    const identity = tripIdentity(t, now);
     const next = p.next!=null ? t.stops[p.next] : null;
     let where;
     if (p.state==="station") where = `Hält in <b>${esc(t.stops[p.idx].name)}</b>`;
@@ -1443,9 +1503,9 @@ function renderCards(now){
     const last = t.stops[t.stops.length-1];
     const remain = (t.end - now)/60000;
     const cap = [t.cap1&&("1. Kl. "+CAP[t.cap1]), t.cap2&&("2. Kl. "+CAP[t.cap2])].filter(Boolean).join(" · ");
-    html += `<div class="card ${isSel?"sel":""}" data-key="${esc(t.key)}" tabindex="0">
-      <div class="t"><span class="name">${esc(t.label)}${state.extra.includes(t)?'<span class="tag">Anschluss</span>':""}</span>${delayBadge(t,p)}</div>
-      <div class="sub">Richtung ${esc(t.dest)}${t.operator?" · "+esc(t.operator):""}${t.geom?" · "+(["tram","bus"].includes(t.group)?"Linienverlauf":"Gleisverlauf"):""}</div>
+    html += `<div class="card ${isSel?"sel":""}" data-key="${esc(t.key)}" data-focus-key="trip-${esc(t.key)}" role="group" aria-label="Fahrt ${esc(identity.label)}" tabindex="0">
+      <div class="t"><button type="button" class="name" data-focus-key="choose-trip-${esc(t.key)}" aria-expanded="${isSel}" aria-label="Fahrt ${esc(identity.label)} anzeigen">${esc(identity.label)}${state.extra.includes(t)?'<span class="tag">Anschluss</span>':""}</button>${delayBadge(t,p)}</div>
+      <div class="sub">Richtung ${esc(identity.dest)}${t.operator?" · "+esc(t.operator):""}${t.geom?" · "+(["tram","bus"].includes(t.group)?"Linienverlauf":"Gleisverlauf"):""}</div>
       <div class="bar"><i style="width:${(p.progress*100).toFixed(1)}%"></i></div>
       <div class="sub">${where}</div>
       <dl class="kv">
@@ -1459,9 +1519,9 @@ function renderCards(now){
     </div>`;
   }
   const fa = state.fetchedAt ? `Daten von ${fmt(state.fetchedAt)}, automatische Aktualisierung jede Minute.` : "";
-  box.innerHTML = html + `<div class="small">${fa}</div>`;
-  box.querySelectorAll(".card").forEach(el=>{ el.onclick=()=>select(el.dataset.key); el.onkeydown=e=>{ if(e.key==="Enter") select(el.dataset.key); }; });
-  box.querySelectorAll(".stops li").forEach(li=>li.onclick=e=>{ e.stopPropagation(); const t = allTrips().find(x=>x.key===li.dataset.key); if (t) openOnward(t, +li.dataset.i); });
+  replaceContent(box, html + `<div class="small">${fa}</div>`);
+  box.querySelectorAll(".card").forEach(el=>{ el.onclick=()=>select(el.dataset.key); el.onkeydown=e=>activateKey(e, ()=>select(el.dataset.key)); });
+  box.querySelectorAll(".stops li").forEach(li=>{ const go=()=>{ const t=allTrips().find(x=>x.key===li.dataset.key); if(t) openOnward(t,+li.dataset.i); }; li.onclick=e=>{e.stopPropagation();go();}; li.onkeydown=e=>activateKey(e,go); });
   box.querySelectorAll("[data-unfollow]").forEach(b=>b.onclick=e=>{ e.stopPropagation(); state.extra = state.extra.filter(x=>x.key!==b.dataset.unfollow); if (state.sel===b.dataset.unfollow) state.sel=null; drawRoutes(); tick(); });
 }
 function stopList(t,p){
@@ -1470,20 +1530,33 @@ function stopList(t,p){
     if (s.cancelled) cls += " cxl";
     const sched = s.schedArr||s.schedDep, exp = s.arr||s.dep;
     const late = sched && exp && (exp-sched) >= 60000;
-    return `<li class="${cls}" data-key="${esc(t.key)}" data-i="${i}" title="Anschlüsse ab ${esc(s.name)}"><span class="d"></span>
+    return `<li class="${cls}" data-key="${esc(t.key)}" data-i="${i}" data-focus-key="stop-${esc(t.key)}-${i}" role="button" tabindex="0" title="Anschlüsse ab ${esc(s.name)}"><span class="d"></span>
       <span>${esc(s.name)}${s.platform?` <span class="small">· ${platTxt(s,t)}</span>`:""}${i===t.stops.length-1?'<span class="cx">Anschlüsse ›</span>':""}</span>
       <span class="tm">${late?`<s>${fmt(sched)}</s>`:""}${fmt(exp)}</span></li>`;
   }).join("") + `</ul><div class="hint">Tipp: Halt antippen, um die Anschlüsse (Zug, S-Bahn, Tram, Bus) zu sehen.</div>`;
 }
 function platTxt(s, t){
-  const w = t && ["tram","bus"].includes(t.group) ? "Kante" : "Gleis";
+  const w = platformWord(t && t.group);
   return s.platformChanged
     ? `<span class="platchg">${w} ${esc(s.platform)}</span> <s class="small">statt ${esc(s.schedPlatform)}</s>`
     : w+" "+esc(s.platform);
 }
 function select(key){ state.sel = key; drawRoutes(); tick(); }
 function esc(s){ return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
-function setStatus(msg, err){ const el=$("status"); el.textContent = msg||""; el.className = "status"+(err?" err":""); }
+function replaceContent(box, html){
+  const active = document.activeElement;
+  const controls = [...box.querySelectorAll('button, [tabindex="0"]')];
+  const index = controls.indexOf(active);
+  const key = active && (active.dataset.focusKey || active.id);
+  box.innerHTML = html;
+  if (index >= 0){
+    const next = [...box.querySelectorAll('button, [tabindex="0"]')];
+    const target = key ? next.find(e=>(e.dataset.focusKey || e.id) === key) : next[index];
+    if (target) target.focus({preventScroll:true});
+  }
+}
+function activateKey(e, fn){ if (e.target !== e.currentTarget) return; if (e.key === "Enter" || e.key === " "){ e.preventDefault(); e.stopPropagation(); fn(); } }
+function setStatus(msg, err){ const el=$("status"); if (el.textContent !== (msg||"")) el.textContent = msg||""; el.className = "status"+(err?" err":""); }
 
 /* ---------- Anschlüsse anzeigen ---------- */
 async function openOnward(trip, i, silent){
@@ -1491,16 +1564,24 @@ async function openOnward(trip, i, silent){
   onward = {stop:s, at: s.arr || s.dep || new Date(), tab: onward && onward.stop===s ? onward.tab : "all", loading:!silent, data: silent && onward ? onward.data : null, error:null};
   renderOnward();
   if (!silent) $("onward").scrollIntoView({behavior:"smooth",block:"start"});
-  try { onward.data = await loadOnward(s, onward.at); }
-  catch(e){ onward.error = e.message; }
-  onward.loading = false; renderOnward();
+  const current = onward;
+  try { const data = await loadOnward(s, current.at); if(onward !== current) return; current.data = data; }
+  catch(e){ if(onward !== current) return; current.error = e.message; }
+  current.loading = false; renderOnward();
+}
+function transferMinutes(d){
+  // Conservative walking estimate (70 m/min) plus two minutes to change platforms.
+  return Math.max(3, Math.ceil((Number.isFinite(d.dist) ? Math.max(0,d.dist) : 400)/70) + 2);
+}
+function departureReachable(d, o, now = Date.now()){
+  const earliest = Math.max(+o.at, +now) + (o.board ? 0 : transferMinutes(d)*60000);
+  return !!d.exp && +d.exp >= earliest && (o.board || !d.cancelled);
 }
 function renderOnward(){
   const box = $("onward");
   if (!onward){ box.innerHTML = ""; return; }
   const o = onward, deps = (o.data && o.data.deps) || [];
-  const minT = Math.max(+o.at, Date.now()) - 60000;   // nur erreichbare Abfahrten
-  let reach = deps.filter(d => +d.exp >= minT);
+  let reach = deps.filter(d => departureReachable(d, o));
   const filtered = !!(o.line || o.dir);
   if (o.line) reach = reach.filter(d => normLine(d.line) === normLine(o.line));
   if (o.dir) reach = reach.filter(d => nameMatch(d.to, o.dir));
@@ -1508,8 +1589,9 @@ function renderOnward(){
   const shown = reach.filter(d=>o.tab==="all"||d.group===o.tab).slice(0,30);
   let h = `<div class="ow-head"><h2>${o.board?"Abfahrten":"Anschlüsse"} ab ${esc(o.stop.name)}</h2><button type="button" class="ow-close" id="owClose">Schliessen ✕</button></div>
     ${filtered?`<div class="small owf">Nur ${o.line?"Linie <b>"+esc(o.line)+"</b>":""}${o.line&&o.dir?", ":""}${o.dir?"Richtung <b>"+esc(o.dir)+"</b>":""} · <button type="button" class="lnk" id="owAll">alle zeigen</button></div>`:""}
-    <div class="small">ab ${fmt(new Date(Math.max(o.at, Date.now())))}${o.data&&o.data.src==="od"?" · nur dieser Bahnhof (Tram-/Bushaltestellen in der Nähe nicht verfügbar)":" · inkl. Haltestellen im Umkreis von 400 m"}</div>
-    <div class="tabs">${GROUPS.map(([g,l])=>`<button type="button" class="tab ${o.tab===g?"on":""}" data-g="${g}" ${g!=="all"&&!counts[g]?"disabled":""}>${l}${o.data?" "+counts[g]:""}</button>`).join("")}</div>`;
+    <div class="small">ab ${fullTime(new Date(Math.max(o.at, Date.now())))}${o.data&&o.data.src==="od"?" · nur dieser Bahnhof (Tram-/Bushaltestellen in der Nähe nicht verfügbar)":" · inkl. Haltestellen im Umkreis von 400 m"}</div>
+    ${!o.board?'<div class="hint">Anschlüsse mit mindestens 3 Min. Umsteigezeit; Gehzeit zu Haltestellen geschätzt, keine Anschlussgarantie.</div>':""}
+    <div class="tabs">${GROUPS.map(([g,l])=>`<button type="button" class="tab ${o.tab===g?"on":""}" aria-pressed="${o.tab===g}" data-focus-key="group-${g}" data-g="${g}" ${g!=="all"&&!counts[g]?"disabled":""}>${l}${o.data?" "+counts[g]:""}</button>`).join("")}</div>`;
   if (o.loading) h += `<div class="empty">Lade Abfahrten …</div>`;
   else if (o.error) h += `<div class="status err">${esc(o.error)}</div>`;
   else if (!shown.length) h += `<div class="empty">Keine passenden Abfahrten in der nächsten Zeit.${filtered?" Prüfe Linie und Richtung oder tippe «alle zeigen».":""}</div>`;
@@ -1517,26 +1599,29 @@ function renderOnward(){
     const late = d.sched && d.exp && (d.exp-d.sched) >= 60000;
     const bg = d.color && /^[0-9a-f]{6}$/i.test(d.color) ? `style="background:#${d.color}"` : "";
     const other = d.stopName && o.stop.name && d.stopName !== o.stop.name ? `<span>ab ${esc(d.stopName)}</span>` : "";
-    return `<div class="dep ${d.cancelled?"cxl":""}" data-k="${k}" tabindex="0" title="Auf der Karte verfolgen">
+    return `<div class="dep ${d.cancelled?"cxl":""}" data-k="${k}" data-focus-key="dep-${esc(d.tripId || d.line+String(d.sched))}" role="button" tabindex="0" title="Auf der Karte verfolgen">
       <span class="tm">${fmt(d.exp)}${late?`<s>${fmt(d.sched)}</s>`:""}</span>
       <span><span class="line" ${bg}>${esc(d.line)}</span></span>
       <span class="to"><b>${esc(d.to)}</b>${d.cancelled?'<span style="color:var(--bad)">fällt aus</span> ':""}${other}</span>
       <span class="pl">${d.platform?(d.platformChanged?`<span class="platchg">${esc(d.platform)}</span>`:esc(d.platform)):""}</span>
     </div>`;
   }).join("") + `<div class="hint">Abfahrt antippen, um das Fahrzeug auf der Karte zu verfolgen.</div>`;
-  box.innerHTML = h;
+  replaceContent(box, h);
   $("owClose").onclick = ()=>{ onward=null; renderOnward(); boardLayer.clearLayers(); };
   if ($("owAll")) $("owAll").onclick = ()=>{ onward.line = null; onward.dir = null; renderOnward(); };
   box.querySelectorAll(".tab").forEach(b=>b.onclick=()=>{ onward.tab=b.dataset.g; renderOnward(); });
-  box.querySelectorAll(".dep").forEach(el=>{ const go=()=>follow(shown[+el.dataset.k]); el.onclick=go; el.onkeydown=e=>{ if(e.key==="Enter") go(); }; });
+  box.querySelectorAll(".dep").forEach(el=>{ const go=()=>follow(shown[+el.dataset.k]); el.onclick=go; el.onkeydown=e=>activateKey(e, go); });
 }
 async function follow(d){
+  if (d.cancelled){ setStatus("Diese Fahrt fällt aus und kann nicht verfolgt werden.", true); return; }
+  const generation = searchGeneration;
   setStatus("Lade Fahrt "+d.line+" …");
   try{
     let t = null;
     if (d.tripId) t = await txSafe(()=>loadTxTrip(d.tripId));
     if (!t && d.od) t = buildTrip(d.od, d.od.stop);
     if (!t) t = await followFallback(d);
+    if (generation !== searchGeneration) return;
     if (!t || t.stops.length < 2) throw new Error("Für diese Fahrt gibt es keine Streckendaten.");
     t.extraInfo = d;
     if (route.active){ route.active = false; stopTimers(); tickTimer = setInterval(tick, TICK_MS); refreshTimer = setInterval(async()=>{ await refreshExtra(); drawRoutes(false); tick(); }, REFRESH_MS); }
@@ -1545,7 +1630,7 @@ async function follow(d){
     setStatus(d.line+" → "+d.to+" wird verfolgt.");
     drawRoutes(); tick();
     if (window.matchMedia("(max-width:760px)").matches) $("results").scrollIntoView({behavior:"smooth",block:"start"});
-  }catch(e){ setStatus(e.message, true); }
+  }catch(e){ if (generation === searchGeneration) setStatus(e.message, true); }
 }
 async function followFallback(d){
   const st = d.stopName || (onward && onward.stop && onward.stop.name); if (!st || !d.sched) return null;
@@ -1557,9 +1642,10 @@ async function followFallback(d){
   return e ? buildTrip(e, e.stop) : null;
 }
 async function refreshExtra(){
+  const extras = state.extra, generation = searchGeneration;
   for (let k=0;k<state.extra.length;k++){
     const t = state.extra[k];
-    if (t.tripId){ const n = await txSafe(()=>loadTxTrip(t.tripId)); if (n) state.extra[k] = n; }
+    if (t.tripId){ const n = await txSafe(()=>loadTxTrip(t.tripId)); if (generation !== searchGeneration || state.extra !== extras) return; if (n) state.extra[k] = n; }
   }
 }
 
@@ -1578,10 +1664,11 @@ const MODES = {
     examples: ["Wo ist das Tram 4 in Zürich", "Bus 31 ab Zürich, Hegibachplatz", "Abfahrten ab hier", "IC von Zürich HB nach Bern", "TGV von Paris Gare de Lyon nach Basel SBB"]
   }
 };
-let modePref = "route", abArr = false;
+let modePref = "route", abArr = false, parsedText = null;
+let searchGeneration = 0, searchBusy = false;
 try { const m = localStorage.getItem("zt-mode"); if (m === "track" || m === "route") modePref = m; } catch(e){}
 const refNow = () => new Date();
-function setAb(isArr){ abArr = !!isArr; $("ab").querySelectorAll("button").forEach(b=>b.classList.toggle("on", (b.dataset.a==="an")===abArr)); }
+function setAb(isArr){ abArr = !!isArr; $("ab").querySelectorAll("button").forEach(b=>{ const on=(b.dataset.a==="an")===abArr; b.classList.toggle("on",on); b.setAttribute("aria-pressed",String(on)); }); }
 const WD_SHORT = ["So","Mo","Di","Mi","Do","Fr","Sa"];
 function dateLabel(iso){
   const today = zurichParts(new Date()).date, d = new Date(iso+"T12:00:00Z");
@@ -1595,6 +1682,7 @@ function buildDateOptions(){
   $("d").innerHTML = opts.join("");
 }
 function setDate(v){
+  if (v && !validDate(v)) throw new Error("Dieses Datum gibt es nicht. Bitte Tag, Monat und Jahr prüfen.");
   const sel = $("d"), today = zurichParts(new Date()).date;
   if (!v || v === today){ sel.value = ""; return; }
   if (![...sel.options].some(o => o.value === v)){ const o = document.createElement("option"); o.value = v; o.textContent = dateLabel(v); sel.appendChild(o); }
@@ -1615,7 +1703,7 @@ function applyFields(mode){
   ["d","t"].forEach(id => { $(id).disabled = off; if (off) $(id).value = ""; });
   $("ab").querySelectorAll("button").forEach(b => b.disabled = off);
   $("now").disabled = off;
-  if (off) setAb(false);
+  setAb(off ? false : abArr);
   $("dthint").hidden = !off;
 }
 function renderChips(){
@@ -1633,32 +1721,51 @@ function setMode(m, {keepResults=false}={}){
   const changed = m !== modePref;
   modePref = m;
   try { localStorage.setItem("zt-mode", m); } catch(e){}
-  $("mode").querySelectorAll("button").forEach(b=>b.classList.toggle("on", b.dataset.m===m));
+  $("mode").querySelectorAll("button").forEach(b=>{ b.classList.toggle("on",b.dataset.m===m); b.setAttribute("aria-pressed",String(b.dataset.m===m)); });
   $("go").textContent = MODES[m].go;
   $("q").placeholder = MODES[m].placeholder;
   renderChips(); applyFields(m);
-  if (changed && !keepResults){ clearResults(); $("q").value = ""; try{ history.replaceState(null,"",location.pathname); }catch(e){} }
+  if (changed && !keepResults){ searchGeneration++; searchBusy=false; $("go").disabled=false; parsedText=null; clearResults(); $("q").value = ""; try{ history.replaceState(null,"",location.pathname); }catch(e){} }
   if (!keepResults || changed) setStatus(MODES[m].status);
 }
 
 async function run(text, {silent=false, keepFields=false}={}){
+  if (silent && searchBusy) return;
+  if (!silent){
+    searchGeneration++; stopTimers(); clearResults();
+    abCache = null; lineCache = null;
+    try { history.replaceState(null,"",location.pathname); } catch(e){}
+  }
+  const generation = searchGeneration;
+  searchBusy = true;
   lastText = text;
-  if (!silent){ abCache = null; lineCache = null; }
-  const w = parseWhen(text);
-  const q = parseQuery(w.rest);
-  // Fragen nach Linie oder Abfahrten gehören in «Live», auch wenn «Route» gewählt ist
-  if (modePref === "route" && !q.to && (q.line || q.intent || q.stop || q.mode)){ setMode("track", {keepResults:true}); }
-  if (modePref === "track") return runTrack(q, text, silent);          // immer live
-  if (!silent && !keepFields){ if (w.date) setDate(w.date); if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
-  const tv = $("t").value.trim(), time = normTime(tv);
-  if (tv && !time){ $("t").classList.add("bad"); setStatus("Zeit bitte als Stunden und Minuten eingeben, z. B. 8:15 oder 0815.", true); return; }
-  if (time) $("t").value = time;
-  const when = {date:$("d").value || null, time, isArr:abArr};
-  return runRoute(q, when, text, silent, keepFields ? null : w.alt);
+  try {
+    const w = parseWhen(text), q = parseQuery(w.rest);
+    if (modePref === "route" && !q.to && (q.line || q.intent || q.stop || q.mode)) setMode("track", {keepResults:true});
+    if (modePref === "track") return await runTrack(q, text, silent);
+    const applyText = !silent && !keepFields && parsedText !== text;
+    if (applyText){ if (w.date) setDate(w.date); if (w.time) $("t").value = w.time; if (w.isArr !== null) setAb(w.isArr); }
+    parsedText = text;
+    const tv = $("t").value.trim(), time = normTime(tv);
+    if (tv && !time){ $("t").classList.add("bad"); throw new Error("Zeit bitte als Stunden und Minuten eingeben, z. B. 8:15 oder 0815."); }
+    if (time) $("t").value = time;
+    if ($("d").value && !validDate($("d").value)) throw new Error("Dieses Datum gibt es nicht.");
+    const when = {date:$("d").value || null, time, isArr:abArr};
+    return await runRoute(q, when, text, silent, applyText ? w.alt : null);
+  } catch(e){ if (generation === searchGeneration) setStatus(e.message || "Die Suche ist fehlgeschlagen.", true); }
+  finally { if (generation === searchGeneration){ searchBusy = false; $("go").disabled = false; } }
 }
+function renderRouteHeader(){
+  const alt = route.alt, when = route.qWhen;
+  const altBtn = alt && alt.time ? ` <button type="button" class="altbtn" id="altBtn" title="Andere Lesart der Uhrzeit">oder ${esc(alt.date && alt.date !== when.date ? dateLabel(alt.date)+" " : "")}${esc(alt.time)}?</button>` : "";
+  $("parsed").innerHTML = `Route · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(when))}${altBtn}${optsTxt(route.query)}`;
+  if (altBtn) $("altBtn").onclick = ()=>{setDate(alt.date || when.date); $("t").value=alt.time; run(lastText,{keepFields:true});};
+}
+
 const HOME_MSG = "«Heim» kennt die Seite noch nicht. Schreib die Adresse, z. B. «nach Bahnhofstrasse 1, Zürich».";
 
 async function runRoute(q, when, text, silent, alt){
+  const generation = searchGeneration;
   let from = q.from || "hier", to = q.to;
   if (!to){
     setStatus("Ich habe das Ziel nicht erkannt. Schreib z. B. «von hier nach Zürich HB», «zum SBB» oder «in Bern ankommen».", true);
@@ -1672,6 +1779,7 @@ async function runRoute(q, when, text, silent, alt){
   try{
     let here = route.here || null;
     if ((fromHere || toHere) && (!silent || !here)) here = await getHere();
+    if (generation !== searchGeneration) return;
     const co = h => h.lat.toFixed(5)+","+h.lon.toFixed(5);
     let f = fromHere ? co(here) : from, t = toHere ? co(here) : to;
     if (silent && route.active && route.f && route.text === text){ f = route.f; t = route.t; }   // aufgelöste Bahnhöfe behalten
@@ -1680,31 +1788,33 @@ async function runRoute(q, when, text, silent, alt){
       if (isMain(f)) f = await mainStationNear(toHere ? here : (isMain(t) ? await getHere() : t), f);
       if (isMain(t)) t = await mainStationNear(fromHere ? here : f, t);
     }
+    if (generation !== searchGeneration) return;
     const nowP = zurichParts(new Date());
     const qWhen = silent && route.active && route.qWhen ? route.qWhen : {date: when.date || nowP.date, time: when.time || nowP.time, isArr: !!when.isArr};
     if (!silent) setStatus("Suche Verbindungen …");
     const opts = Object.assign({}, q.opts, {line: q.line});
     if (q.mode && !(q.opts.only||[]).length && !q.line) opts.only = [q.mode];      // «mit dem Tram», «Bus von … nach …»
     const r = await routeQuery(f, t, qWhen, opts);
+    if (generation !== searchGeneration) return;
     const prevKey = silent && route.active && route.list[route.sel] ? route.list[route.sel].key : null;
     const list = r.list.sort((a,b)=>a.dep-b.dep);
     let sel = prevKey ? list.findIndex(x=>x.key===prevKey) : -1;
     if (sel < 0) sel = qWhen.isArr ? list.length-1 : 0;
-    route = {active:true, list, sel, f, t, text, opts, here:(fromHere||toHere)?here:null, qWhen, fetchedAt:new Date(),
+    route = {active:true, list, sel, f, t, text, opts, here:(fromHere||toHere)?here:null, qWhen, query:q, alt:silent ? route.alt : alt, fetchedAt:new Date(),
              fromName: fromHere ? "deinem Standort"+(r.fromName?" ("+r.fromName+")":"") : (r.fromName||f),
              toName: toHere ? "deinem Standort" : (r.toName||t)};
     state = {q:null, trips:[], extra:[], sel:null, nextDeps:[], fetchedAt:null, resolved:null};
-    const altBtn = alt && alt.time ? ` <button type="button" class="altbtn" id="altBtn" title="Andere Lesart der Uhrzeit">oder ${esc(alt.date && alt.date !== qWhen.date ? dateLabel(alt.date)+" " : "")}${esc(alt.time)}?</button>` : "";
-    $("parsed").innerHTML = `Route · von <b>${esc(route.fromName)}</b> nach <b>${esc(route.toName)}</b> · ${esc(whenTxt(qWhen))}${altBtn}${optsTxt(q)}`;
-    if (altBtn) $("altBtn").onclick = () => { setDate(alt.date || ""); $("t").value = alt.time; run(lastText, {keepFields:true}); };
+    renderRouteHeader();
     setStatus(`${list.length} ${list.length===1?"Verbindung":"Verbindungen"} gefunden. Antippen zeigt die Details.`+(r.notes.length?" "+r.notes.join(" "):""));
     drawRouteMap(!silent); tickRoute(); enrichRoute(list[sel]);
     document.body.classList.add("has-results");
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
-    saveUrl(text, when);
+    saveUrl(text, qWhen);
   }catch(e){
+    if (generation !== searchGeneration) return;
     if (!silent){ setStatus(e.message || "Unbekannter Fehler.", true); route.active = false; $("results").innerHTML = ""; layer.clearLayers(); }
-  }finally{ $("go").disabled = false; }
+  }finally{ if (generation === searchGeneration) $("go").disabled = false; }
+  if (generation !== searchGeneration) return;
   stopTimers();
   if (route.active){
     refreshTimer = setInterval(()=>run(lastText,{silent:true}), REFRESH_MS);
@@ -1746,6 +1856,7 @@ function startLiveTimers(){
 // Fahrten, die jetzt zwischen A und B unterwegs sind (alle Verkehrsmittel)
 let abCache = null;   // {text, q}: aufgelöste Orte, damit die Aktualisierung nicht jedes Mal den Standort abfragt
 async function runAB(q, text, silent){
+  const generation = searchGeneration;
   const lbl = x => HERE_RE.test(x||"hier") ? "deinem Standort" : isMain(x) ? "Bahnhof" : x;
   $("parsed").innerHTML = `Live · <b>${esc(whatTxt(q))}</b> · von <b>${esc(lbl(q.from))}</b> nach <b>${esc(lbl(q.to))}</b>`;
   if (!silent){ setStatus("Suche Fahrten …"); $("go").disabled = true; onward = null; renderOnward(); boardLayer.clearLayers(); }
@@ -1761,10 +1872,12 @@ async function runAB(q, text, silent){
       rq.to = HERE_RE.test(q.to) ? await nearestStation(here) : q.to;
       if (isMain(rq.from)) rq.from = await mainStationNear(isMain(rq.to) ? await getHere() : rq.to, rq.from);
       if (isMain(rq.to)) rq.to = await mainStationNear(here && HERE_RE.test(from) ? here : rq.from, rq.to);
+      if (generation !== searchGeneration) return;
       abCache = {text, q: rq};
     }
     if (!silent) setStatus("Suche Fahrten …");
     const r = await findRunning(rq, new Date());
+    if (generation !== searchGeneration) return;
     if (!silent && !r.running.length && !q.type && !q.number && !q.line && !state.extra.length){
       // Nichts fährt ohne Umsteigen von A nach B (z. B. «von hier zum SBB»): Verbindungen mit Live-Position zeigen
       setMode("route", {keepResults:true});
@@ -1773,6 +1886,7 @@ async function runAB(q, text, silent){
       return;
     }
     if (silent) await refreshExtra();
+    if (generation !== searchGeneration) return;
     const prevSel = state.sel;
     const keep = silent ? state.extra : [];
     route.active = false;
@@ -1787,8 +1901,10 @@ async function runAB(q, text, silent){
     if (silent && onward && onward.data){ const o = onward; const tr = allTrips().find(t=>t.stops.includes(o.stop)); if (tr) openOnward(tr, tr.stops.indexOf(o.stop), true); }
     saveUrl(text, null);
   }catch(e){
+    if (generation !== searchGeneration) return;
     if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
-  }finally{ $("go").disabled = false; }
+  }finally{ if (generation === searchGeneration) $("go").disabled = false; }
+  if (generation !== searchGeneration) return;
   stopTimers();
   if (state.q) startLiveTimers();
 }
@@ -1796,6 +1912,7 @@ async function runAB(q, text, silent){
 // Alle Fahrzeuge einer Linie im Gebiet (Transitous: Fahrten im Kartenausschnitt)
 let lineCache = null;   // {text, center}
 async function runLine(q, text, silent){
+  const generation = searchGeneration;
   const head = () => `Live · <b>${esc(whatTxt(q))}</b>${q.dir?" · Richtung <b>"+esc(q.dir)+"</b>":""}`;
   $("parsed").innerHTML = head();
   if (!silent){ setStatus("Suche die Linie …"); $("go").disabled = true; onward = null; renderOnward(); boardLayer.clearLayers(); }
@@ -1812,6 +1929,7 @@ async function runLine(q, text, silent){
           center = {lat:c.lat, lon:c.lng, name:"Kartenausschnitt"};
         }
       }
+      if (generation !== searchGeneration) return;
       lineCache = {text, center};
     }
     if (!silent) setStatus("Suche Fahrzeuge der Linie "+q.line+" …");
@@ -1819,6 +1937,7 @@ async function runLine(q, text, silent){
     const segs = await txSafe(() => tx("/v6/map/trips", {zoom:15, precision:5,
       min:(center.lat-dLat).toFixed(4)+","+(center.lon-dLon).toFixed(4), max:(center.lat+dLat).toFixed(4)+","+(center.lon+dLon).toFixed(4),
       startTime:now.toISOString(), endTime:new Date(now.getTime()+60000).toISOString()}));
+    if (generation !== searchGeneration) return;
     if (!segs){
       // Transitous nicht erreichbar: Abfahrtstafel als Ersatz
       if (!silent) setStatus("Live-Positionen der Linie sind gerade nicht verfügbar. Ich zeige die Abfahrten.");
@@ -1834,10 +1953,15 @@ async function runLine(q, text, silent){
     }
     const pick = [...ids.entries()].sort((a,b)=>a[1]-b[1]).slice(0, 14).map(x=>x[0]);
     let trips = (await Promise.all(pick.map(id => txSafe(() => loadTxTrip(id))))).filter(t => t && t.stops.length > 1);
-    const dests = [...new Set(trips.map(t => t.dest).filter(Boolean))];
+    trips = trips.filter(t => {
+      const current = tripIdentity(t, now);
+      return normLine(current.label) === want && modeOk(current.group, q.mode) && +t.start <= +now && +t.end >= +now;
+    });
+    const dests = [...new Set(trips.map(t => tripIdentity(t, now).dest).filter(Boolean))];
     if (q.dir) trips = trips.filter(t => { const p = positionAt(t, now); const rest = t.stops.slice(p ? p.idx : 0);
-      return nameMatch(t.dest, q.dir) || rest.some(s => nameMatch(s.name, q.dir)); });
+      return nameMatch(tripIdentity(t, now).dest, q.dir) || rest.slice(0, (tripIdentity(t, now).toIndex ?? t.stops.length) - (p ? p.idx : 0) + 1).some(s => nameMatch(s.name, q.dir)); });
     trips.sort((a,b) => (a.dest||"").localeCompare(b.dest||"") || a.start - b.start);
+    if (generation !== searchGeneration) return;
     const prevSel = state.sel, keep = silent ? state.extra : [];
     route.active = false;
     state = {q, line:true, center, trips, dests, extra:keep, nextDeps:[], sel:null, fetchedAt:new Date(), resolved:{from:center.name}};
@@ -1854,19 +1978,23 @@ async function runLine(q, text, silent){
     if (!silent && window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"});
     saveUrl(text, null);
   }catch(e){
+    if (generation !== searchGeneration) return;
     if (!silent) { setStatus(e.message || "Unbekannter Fehler.", true); state.q = null; $("results").innerHTML=""; layer.clearLayers(); }
-  }finally{ $("go").disabled = false; }
+  }finally{ if (generation === searchGeneration) $("go").disabled = false; }
+  if (generation !== searchGeneration) return;
   stopTimers();
   if (state.q) startLiveTimers();
 }
 
 // Abfahrten an einer Haltestelle oder am Standort, optional nach Linie/Richtung/Verkehrsmittel gefiltert
 async function runBoard(q, text, silent){
+  const generation = searchGeneration;
   const filt = `${q.line?" · Linie <b>"+esc(q.line)+"</b>":(q.mode?" · <b>"+esc(MODE_TXT[q.mode])+"</b>":"")}${q.dir?" · Richtung <b>"+esc(q.dir)+"</b>":""}`;
   if (!silent){ setStatus(q.stop && !HERE_RE.test(q.stop) ? "Suche die Haltestelle …" : "Ermittle deinen Standort …"); $("go").disabled = true; }
   try{
     const reuse = silent && onward && onward.board && onward.text === text;
     const stop = reuse ? onward.stop : await placeToStop(q.stop || "hier");
+    if (generation !== searchGeneration) return;
     if (!silent){ clearResults(); }
     route.active = false;
     if (!reuse) onward = {board:true, text, stop, at:new Date(), tab:tabOfMode(q.mode), line:q.line, dir:q.dir, loading:true, data:null, error:null};
@@ -1874,7 +2002,7 @@ async function runBoard(q, text, silent){
     renderOnward();
     if (!silent) setStatus("Lade Abfahrten …");
     const data = await loadOnward(stop, new Date());
-    if (!onward || onward.text !== text) return;              // inzwischen etwas anderes gesucht
+    if (generation !== searchGeneration || !onward || onward.text !== text) return;              // inzwischen etwas anderes gesucht
     onward.at = new Date(); onward.data = data; onward.loading = false; onward.error = null;
     renderOnward();
     if (!silent) setStatus("");
@@ -1882,17 +2010,19 @@ async function runBoard(q, text, silent){
     L.marker([stop.lat, stop.lon], {icon:L.divIcon({className: stop.here ? "youmk" : "stopsq end", iconSize: stop.here ? [14,14] : [14,14]})})
       .bindTooltip(stop.here ? "Dein Standort" : esc(stop.name)).addTo(boardLayer);
     if (!silent){ map.setView([stop.lat, stop.lon], 16); if (window.matchMedia("(max-width:760px)").matches) $("parsed").scrollIntoView({behavior:"smooth",block:"start"}); }
-    if (silent && state.extra.length){ await refreshExtra(); drawRoutes(false); tick(); }
+    if (silent && state.extra.length){ await refreshExtra(); if (generation !== searchGeneration) return; drawRoutes(false); tick(); }
     document.body.classList.add("has-results");
     saveUrl(text, null);
   }catch(e){
+    if (generation !== searchGeneration) return;
     if (!silent){ setStatus(e.message || "Unbekannter Fehler.", true); if (onward && onward.board){ onward = null; renderOnward(); } }
-  }finally{ $("go").disabled = false; }
+  }finally{ if (generation === searchGeneration) $("go").disabled = false; }
+  if (generation !== searchGeneration) return;
   if (!silent || !refreshTimer) startLiveTimers();
 }
 function saveUrl(text, when){
   const u = new URLSearchParams(); u.set("m", modePref); u.set("q", text);
-  if (when){ if (when.date) u.set("d", when.date); if (when.time) u.set("t", when.time); if (when.isArr) u.set("a","1"); }
+  if (when){ if (when.date) u.set("d", when.date); if (when.time) u.set("t", when.time); u.set("a",when.isArr?"1":"0"); }
   try{ history.replaceState(null,"","?"+u.toString()); }catch(e){}
 }
 
@@ -1908,9 +2038,10 @@ const P0 = new URLSearchParams(location.search);
 const m0 = P0.get("m")==="track" || P0.get("m")==="route" ? P0.get("m") : modePref;
 modePref = null; setMode(m0, {keepResults:true});
 buildDateOptions();
-if (m0 === "route"){ if (P0.get("d")) setDate(P0.get("d")); if (P0.get("t")) $("t").value = P0.get("t"); if (P0.get("a")==="1") setAb(true); }
+try { if (m0 === "route"){ if (P0.get("d")) setDate(P0.get("d")); if (P0.get("t")) $("t").value = P0.get("t"); if (P0.get("a")==="1") setAb(true); }
 const initial = P0.get("q");
-if (initial){ $("q").value = initial; run(initial); }
+if (initial){ $("q").value = initial; run(initial, {keepFields:P0.has("d") || P0.has("t") || P0.has("a")}); }
+} catch(e){ setStatus(e.message, true); }
 
 window.__zt = {parseQuery, parseWhen, zurichToDate, buildRoute, positionAt, buildTrip, decodePolyline, txTrip, mergeTx, attachGeometry, normLine, nameMatch, transpOf, trackKind, mainStationNear};
 </script>

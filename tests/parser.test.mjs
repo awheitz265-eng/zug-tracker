@@ -1,14 +1,7 @@
-// Prüft die Satzerkennung (parseWhen + parseQuery) im echten Browser.
-// Aufruf: node tests/parser.test.mjs   (braucht Playwright mit Chromium)
-// Bezugszeit: Dienstag, 3.11.2026, 19:50 Uhr Schweizer Zeit.
-import { createRequire } from "node:module";
-const { chromium } = createRequire(import.meta.url)("playwright");
-import { fileURLToPath } from "node:url";
-import path from "node:path";
-
+// Satzerkennung ohne Browser, Kartenbibliothek oder Netz.
+// Aufruf: node tests/parser.test.mjs
+import {loadApp} from './app-harness.mjs';
 const NOW = "2026-11-03T18:50:00Z";
-const file = "file://" + path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../index.html");
-
 // [Eingabe, erwartete Felder]  (nur angegebene Felder werden geprüft)
 const CASES = [
   // --- Zeit ---
@@ -89,17 +82,13 @@ const CASES = [
   ["Zürich, Bahnhofstrasse 1 nach Luzern", {from:"Zürich, Bahnhofstrasse 1", to:"Luzern"}],
 ];
 
-const browser = await chromium.launch();
-const page = await browser.newPage();
-await page.route(/tile\.openstreetmap|transport\.opendata|transitous/, r => r.abort());
-await page.goto(file);
-await page.waitForFunction(() => window.__zt);
-const res = await page.evaluate(([cases, now]) => cases.map(([q]) => {
-  const w = window.__zt.parseWhen(q, new Date(now));
-  const p = window.__zt.parseQuery(w.rest);
+
+const app = loadApp();
+const res = CASES.map(([q]) => app.run(`(() => {
+  const w = parseWhen(testArgs.q, new Date(testArgs.now));
+  const p = parseQuery(w.rest);
   return {date:w.date, time:w.time, isArr:w.isArr, alt:w.alt, ...p, ...p.opts};
-}), [CASES, NOW]);
-await browser.close();
+})()`, {q, now:NOW}));
 
 let fail = 0;
 CASES.forEach(([q, exp], i) => {

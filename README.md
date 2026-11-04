@@ -24,9 +24,20 @@ Eingegeben wird ein einfacher Satz, z. B. «Von hier zum SBB», «Morgen Nachmit
 
 ## Tests
 
-- `node tests/parser.test.mjs`: prüft die Satzerkennung mit 73 Beispielsätzen bei fester Bezugszeit (braucht Playwright mit Chromium, kein Netz).
+- `node tests/parser.test.mjs`: prüft die Satzerkennung mit 73 Beispielsätzen bei fester Bezugszeit (Node.js, kein Browser und kein Netz).
+- `node --test tests/regression.test.mjs`: prüft Kalendergrenzen, Linienwechsel, erreichbare Anschlüsse, Ausfallanzeigen, Zeit-/Linkzustand, Blättern, Via-Ziele, veraltete Antworten und Fokuswiederherstellung (Node.js, kein Netz).
 - `node tests/station.test.mjs`: prüft an 20 Orten, welcher Bahnhof für «HB», «SBB» und «Bahnhof» gewählt wird (braucht Netz).
 - `node tests/live-smoke.mjs [Ordner]`: spielt typische Suchen mit echten Daten durch und speichert auf Wunsch Screenshots (braucht Netz).
+
+Die beiden letzten Tests benötigen Playwright mit Chromium. Die netzunabhängigen Tests verwenden den tatsächlichen Anwendungscode mit kleinen DOM-/Kartenadaptern. Sie ersetzen keinen Test der Darstellung und Tastaturbedienung im Browser.
+
+## Zuverlässigkeit von Suchergebnissen
+
+- Bei Fahrten mit Linienwechsel wird die Liniennummer des aktuellen Abschnitts angezeigt.
+- Anschlüsse werden frühestens nach Ankunft plus mindestens drei Minuten Umsteigezeit angezeigt. Für nahe Haltestellen wird die Gehzeit mit 70 Metern pro Minute plus zwei Minuten Puffer geschätzt. Das ist keine Anschlussgarantie und berücksichtigt keine individuellen Mobilitätseinschränkungen.
+- Ausgefallene Fahrtabschnitte oder Halte werden in der Routenansicht vor einer Pünktlichkeitsangabe ausgewiesen, soweit die Datenquelle den Ausfall liefert.
+- Gewählte alternative Zeiten, manuelle Änderungen nach einer Suche und die Navigation zu früheren/späteren Verbindungen bleiben in den expliziten Suchlinks erhalten. Verbindungskarten nennen auch das Datum.
+- Ungültige Kalenderdaten werden vor der Anfrage abgefangen. Netzwerkanfragen haben eine Zeitgrenze; veraltete Suchantworten überschreiben keine neuere Suche.
 
 ## Datenquellen
 
